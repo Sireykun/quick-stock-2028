@@ -389,13 +389,16 @@ interface MetadataCacheEntry {
   data: SheetMetadata;
 }
 const metadataCache = new Map<string, MetadataCacheEntry>();
+const pendingMetadata = new Map<string, Promise<SheetMetadata>>();
 const METADATA_TTL_MS = 60000; // 1 minute
 
 export function invalidateSpreadsheetMetadataCache(spreadsheetId?: string) {
   if (spreadsheetId) {
     metadataCache.delete(spreadsheetId);
+    pendingMetadata.delete(spreadsheetId);
   } else {
     metadataCache.clear();
+    pendingMetadata.clear();
   }
 }
 
@@ -409,9 +412,19 @@ export async function getSpreadsheetMetadata(spreadsheetId: string, forceFresh =
       return entry.data;
     }
   }
-  const data: SheetMetadata = await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`);
-  metadataCache.set(spreadsheetId, { timestamp: Date.now(), data });
-  return data;
+  if (!forceFresh && pendingMetadata.has(spreadsheetId)) {
+    return pendingMetadata.get(spreadsheetId)!;
+  }
+  const request = fetchWithRetry(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=spreadsheetId,properties(title),sheets(properties(sheetId,title,index))`
+  ).then((data: SheetMetadata) => {
+    metadataCache.set(spreadsheetId, { timestamp: Date.now(), data });
+    return data;
+  }).finally(() => {
+    pendingMetadata.delete(spreadsheetId);
+  });
+  pendingMetadata.set(spreadsheetId, request);
+  return request;
 }
 
 export async function deleteClassItems(spreadsheetId: string, sheetId: number, sheetName: string, rowsToDelete: number[], className: string): Promise<void> {
@@ -609,7 +622,7 @@ export async function deleteEntireClassOrLocation(spreadsheetId: string, sheetId
  * Ensures that a Stock Room sheet has the 9-column headers and that old stock items
  * (where Location was stored in Col C instead of Col I) are migrated directly in Google Sheets.
  */
-export async function ensureStockSheetMigrated(spreadsheetId: string, sheetName: string): Promise<void> {
+export async function ensureStockSheetMigrated(spreadsheetId: string, sheetName: string): Promise<{ values?: string[][] }> {
   const actualSheetName = await resolveSheetName(spreadsheetId, sheetName);
   const range = `'${actualSheetName}'!A1:I`;
   const encodedRange = encodeURIComponent(range);
@@ -621,7 +634,7 @@ export async function ensureStockSheetMigrated(spreadsheetId: string, sheetName:
   } catch (error: any) {
     if (error.status === 400 && error.message?.includes('Unable to parse range')) {
       // The sheet does not exist! Fallback gracefully instead of creating.
-      return;
+      return { values: [] };
     }
     throw error;
   }
@@ -631,7 +644,7 @@ export async function ensureStockSheetMigrated(spreadsheetId: string, sheetName:
       method: 'PUT',
       body: JSON.stringify({ values: [newHeaders] })
     });
-    return;
+    return { values: [newHeaders] };
   }
   
   const header = data.values[0] && isHeaderRow(data.values[0]) ? data.values[0] : undefined;
@@ -660,7 +673,9 @@ export async function ensureStockSheetMigrated(spreadsheetId: string, sheetName:
       method: 'PUT',
       body: JSON.stringify({ values: newValues })
     });
+    return { values: newValues };
   }
+  return data;
 }
 
 export function detectSheetFormat(headerRow?: string[], sampleRows?: string[][]): 'FormatA' | 'FormatB' {
@@ -705,11 +720,7 @@ export function detectRowFormat(headerRow?: string[], dataRow?: string[]): 'Form
  * Auto-detects whether Col A is Location/Class Name or Item Name.
  */
 export async function getInventory(spreadsheetId: string, sheetName: string): Promise<SheetRow[]> {
-  await ensureStockSheetMigrated(spreadsheetId, sheetName);
-  const actualSheetName = await resolveSheetName(spreadsheetId, sheetName);
-  const range = `'${actualSheetName}'!A1:I`;
-  const encodedRange = encodeURIComponent(range);
-  const data = await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodedRange}`);
+  const data = await ensureStockSheetMigrated(spreadsheetId, sheetName);
   
   if (!data.values || data.values.length === 0) return [];
 
@@ -955,11 +966,7 @@ export async function getLocations(spreadsheetId: string, sheetName: string): Pr
 }
 
 export async function getClasses(spreadsheetId: string, sheetName: string): Promise<{title: string, isChecked: boolean}[]> {
-  await ensureStockSheetMigrated(spreadsheetId, sheetName);
-  const actualSheetName = await resolveSheetName(spreadsheetId, sheetName);
-  const range = `'${actualSheetName}'!A1:I`;
-  const encodedRange = encodeURIComponent(range);
-  const data = await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodedRange}`);
+  const data = await ensureStockSheetMigrated(spreadsheetId, sheetName);
   
   if (!data.values || data.values.length === 0) return [];
 
@@ -1100,11 +1107,7 @@ export async function getClassInventory(spreadsheetId: string, sheetName: string
 }
 
 export async function getAllClassesAndItems(spreadsheetId: string, sheetName: string): Promise<Record<string, SheetRow[]>> {
-  await ensureStockSheetMigrated(spreadsheetId, sheetName);
-  const actualSheetName = await resolveSheetName(spreadsheetId, sheetName);
-  const range = `'${actualSheetName}'!A1:I`;
-  const encodedRange = encodeURIComponent(range);
-  const data = await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodedRange}`);
+  const data = await ensureStockSheetMigrated(spreadsheetId, sheetName);
   
   const result: Record<string, SheetRow[]> = {};
   if (!data.values || data.values.length === 0) return result;
@@ -2189,10 +2192,45 @@ export async function getDashboardSummary(spreadsheetId: string): Promise<Dashbo
   const itemMap = new Map<string, { quantity: number, inStock: number, inClasses: number, tag: string, type: string }>();
   const tagMap = new Map<string, number>();
 
+  const [classesMap, stockMap] = await Promise.all([
+    getAllClassesAndItems(spreadsheetId, classesTabName).catch((error) => {
+      console.error('Failed to load classes data for dashboard', error);
+      return {} as Record<string, SheetRow[]>;
+    }),
+    stockTabName
+      ? getAllClassesAndItems(spreadsheetId, stockTabName).catch((error) => {
+          console.error('Failed to load stock room data for dashboard', error);
+          return {} as Record<string, SheetRow[]>;
+        })
+      : Promise.resolve({} as Record<string, SheetRow[]>),
+  ]);
+
   // Fetch Classes
-  try {
-    const classesMap = await getAllClassesAndItems(spreadsheetId, classesTabName);
-    for (const [_, rows] of Object.entries(classesMap)) {
+  for (const [_, rows] of Object.entries(classesMap)) {
+    rows.forEach((row) => {
+      const itemName = row.item ? row.item.trim() : '';
+      if (itemName) {
+        const quantity = parseInt(row.quantity) || 0;
+        const tag = row.tag ? row.tag.trim() : 'Uncategorized';
+        const type = row.type ? row.type.trim() : '';
+
+        result.classes.totalItems += quantity;
+        const status = row.status ? row.status.trim().toLowerCase() : '';
+        if (status === 'checked' || status === 'ok' || status === 'yes') result.classes.checkedItems += quantity;
+
+        const existing = itemMap.get(itemName) || { quantity: 0, inStock: 0, inClasses: 0, tag, type };
+        existing.quantity += quantity;
+        existing.inClasses += quantity;
+        itemMap.set(itemName, existing);
+
+        tagMap.set(tag, (tagMap.get(tag) || 0) + quantity);
+      }
+    });
+  }
+
+  // Fetch Stock Room
+  if (stockTabName) {
+    for (const [_, rows] of Object.entries(stockMap)) {
       rows.forEach((row) => {
         const itemName = row.item ? row.item.trim() : '';
         if (itemName) {
@@ -2200,50 +2238,18 @@ export async function getDashboardSummary(spreadsheetId: string): Promise<Dashbo
           const tag = row.tag ? row.tag.trim() : 'Uncategorized';
           const type = row.type ? row.type.trim() : '';
 
-          result.classes.totalItems += quantity;
+          result.stock.totalItems += quantity;
           const status = row.status ? row.status.trim().toLowerCase() : '';
-          if (status === 'checked' || status === 'ok' || status === 'yes') result.classes.checkedItems += quantity;
+          if (status === 'checked' || status === 'ok' || status === 'yes') result.stock.checkedItems += quantity;
 
           const existing = itemMap.get(itemName) || { quantity: 0, inStock: 0, inClasses: 0, tag, type };
           existing.quantity += quantity;
-          existing.inClasses += quantity;
+          existing.inStock += quantity;
           itemMap.set(itemName, existing);
 
           tagMap.set(tag, (tagMap.get(tag) || 0) + quantity);
         }
       });
-    }
-  } catch (e) {
-    console.error("Failed to load classes data for dashboard", e);
-  }
-
-  // Fetch Stock Room
-  if (stockTabName) {
-    try {
-      const stockMap = await getAllClassesAndItems(spreadsheetId, stockTabName);
-      for (const [_, rows] of Object.entries(stockMap)) {
-        rows.forEach((row) => {
-          const itemName = row.item ? row.item.trim() : '';
-          if (itemName) {
-            const quantity = parseInt(row.quantity) || 0;
-            const tag = row.tag ? row.tag.trim() : 'Uncategorized';
-            const type = row.type ? row.type.trim() : '';
-
-            result.stock.totalItems += quantity;
-            const status = row.status ? row.status.trim().toLowerCase() : '';
-            if (status === 'checked' || status === 'ok' || status === 'yes') result.stock.checkedItems += quantity;
-
-            const existing = itemMap.get(itemName) || { quantity: 0, inStock: 0, inClasses: 0, tag, type };
-            existing.quantity += quantity;
-            existing.inStock += quantity;
-            itemMap.set(itemName, existing);
-
-            tagMap.set(tag, (tagMap.get(tag) || 0) + quantity);
-          }
-        });
-      }
-    } catch (e) {
-      console.error("Failed to load stock room data for dashboard", e);
     }
   }
 
