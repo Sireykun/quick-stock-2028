@@ -17,6 +17,9 @@ import {
 } from "../lib/sheets";
 import { useTheme } from "../components/ThemeProvider";
 import { authorizeGoogleSheets, getAccessToken } from "../lib/auth";
+import { DEFAULT_SPREADSHEET_ID } from "../lib/config";
+
+const spreadsheetIdFromInput = (value: string) => value.match(/\/spreadsheets\/d\/([A-Za-z0-9_-]+)/)?.[1] || value.trim();
 
 export function Settings() {
   const [stockSheetId, setStockSheetId] = useState("");
@@ -25,7 +28,7 @@ export function Settings() {
   const { theme, toggleTheme } = useTheme();
 
   const [status, setStatus] = useState<
-    "idle" | "saving" | "success" | "error" | "creating"
+    "idle" | "saving" | "success" | "error" | "creating" | "needsAuth"
   >("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [authorizing, setAuthorizing] = useState(false);
@@ -38,7 +41,7 @@ export function Settings() {
 
   useEffect(() => {
     const savedClasses =
-      localStorage.getItem("quickStock_classesSheetId") || "";
+      localStorage.getItem("quickStock_classesSheetId") || DEFAULT_SPREADSHEET_ID;
     const savedThreshold =
       localStorage.getItem("quickStock_lowInventoryThreshold") || "5";
     setClassesSheetId(savedClasses);
@@ -51,11 +54,13 @@ export function Settings() {
     try {
       await authorizeGoogleSheets();
       setHasActiveGoogleToken(true);
+      await getSpreadsheetMetadata(spreadsheetIdFromInput(classesSheetId));
       setStatus("success");
       setTimeout(() => setStatus("idle"), 3000);
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || "Failed to authorize Google Sheets.");
+      setStatus("error");
     } finally {
       setAuthorizing(false);
     }
@@ -67,19 +72,16 @@ export function Settings() {
     setErrorMsg("");
 
     try {
-      if (classesSheetId) {
-        try {
-          await getSpreadsheetMetadata(classesSheetId);
-        } catch (e) {
-          console.warn("Metadata verification warning:", e);
-        }
-      }
+      const targetId = spreadsheetIdFromInput(classesSheetId);
+      if (!targetId) throw new Error('Enter a Google Sheets link or spreadsheet ID.');
+      if (hasActiveGoogleToken) await getSpreadsheetMetadata(targetId);
 
-      localStorage.setItem("quickStock_classesSheetId", classesSheetId);
+      localStorage.setItem("quickStock_classesSheetId", targetId);
       localStorage.setItem("quickStock_lowInventoryThreshold", lowInventoryThreshold);
-      setStatus("success");
+      setClassesSheetId(targetId);
+      setStatus(hasActiveGoogleToken ? "success" : "needsAuth");
 
-      setTimeout(() => setStatus("idle"), 3000);
+      if (hasActiveGoogleToken) setTimeout(() => setStatus("idle"), 3000);
     } catch (err: any) {
       console.error(err);
       setStatus("error");
@@ -175,19 +177,31 @@ export function Settings() {
             htmlFor="classesSheetId"
             className="block text-sm font-medium text-slate-700 dark:text-slate-300"
           >
-            Main Spreadsheet ID (Classes & Stock Room)
+            Main Google Sheet (Classes & Stock Room)
           </label>
           <input
             id="classesSheetId"
             type="text"
             value={classesSheetId}
             onChange={(e) => setClassesSheetId(e.target.value)}
-            placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+            placeholder="Paste a Google Sheets link or spreadsheet ID"
             className="w-full px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-slate-800 dark:text-slate-100"
           />
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Each tab in this spreadsheet represents a different class/room.
+            This app reads the CLASS, stock room, Item Master, and template tabs from this spreadsheet. The tab link's gid is handled automatically.
           </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/30 rounded-xl">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Google Sheets access</h3>
+            <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+              {hasActiveGoogleToken ? 'Google account connected. Save the sheet above to verify access.' : 'Connect a Google account with access to this Sheet to read and save live inventory.'}
+            </p>
+          </div>
+          <button type="button" onClick={handleAuthorizeGoogle} disabled={authorizing} className="shrink-0 min-h-11 px-4 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-bold disabled:opacity-50">
+            {authorizing ? 'Connecting...' : hasActiveGoogleToken ? 'Reconnect Google' : 'Connect Google'}
+          </button>
         </div>
 
         <div className="space-y-2">
@@ -222,6 +236,13 @@ export function Settings() {
           <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-lg flex gap-3 text-sm">
             <CheckCircle2 className="w-5 h-5 shrink-0" />
             <p>Settings saved successfully!</p>
+          </div>
+        )}
+
+        {status === "needsAuth" && (
+          <div className="p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-800 dark:text-amber-300 rounded-lg flex gap-3 text-sm" role="status">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <p>Sheet saved. Connect your Google account above to load and edit its live data.</p>
           </div>
         )}
 

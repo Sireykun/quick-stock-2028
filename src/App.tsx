@@ -3,9 +3,10 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './components/AuthProvider';
 import { ThemeProvider } from './components/ThemeProvider';
 import { Layout } from './components/Layout';
-import { Loader2 } from 'lucide-react';
+import { BrandLoader } from './components/BrandLoader';
 
 const Home = React.lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
+const OnInventory = React.lazy(() => import('./pages/OnInventory').then(m => ({ default: m.OnInventory })));
 const Settings = React.lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
 const ClassesList = React.lazy(() => import('./pages/ClassesList').then(m => ({ default: m.ClassesList })));
 const StockRoomList = React.lazy(() => import('./pages/StockRoomList').then(m => ({ default: m.StockRoomList })));
@@ -23,7 +24,7 @@ const Investigate = React.lazy(() => import('./pages/Investigate').then(m => ({ 
 
 const LoadingScreen = () => (
   <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
-    <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+    <BrandLoader compact label="Loading page" />
   </div>
 );
 
@@ -36,6 +37,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Layout />}>
                 <Route index element={<Home />} />
+                <Route path="on-inventory" element={<OnInventory />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="stock-room" element={<StockRoomList />} />
                 <Route path="stock-room/:locationName" element={<StockLocationDetail />} />

@@ -1,10 +1,10 @@
 import React from 'react';
 
-export function HSLogo(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 100 100" fill="currentColor" {...props}>
-      <polygon points="20,20 35,20 35,45 55,45 40,60 35,60 35,65 20,80" />
-      <polygon points="80,15 65,30 65,45 30,80 55,80 80,55" />
-    </svg>
-  );
+/** Displays the user's original logo image without redrawing its artwork. */
+export function HSLogo({ className = '', ...props }: React.HTMLAttributes<HTMLSpanElement>) {
+  return <span className={`hs-logo-source ${className}`} role="img" aria-label="Sireykun Hout logo" {...props} />;
+}
+
+export function HSWordmark({ compact = false, className = '' }: { compact?: boolean; className?: string }) {
+  return <span className={`hs-wordmark-source ${compact ? 'hs-wordmark-source-compact' : ''} ${className}`} role="img" aria-label="Sireykun Hout" />;
 }

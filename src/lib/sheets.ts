@@ -293,8 +293,12 @@ export async function fetchWithRetry(url: string, options: RequestInit = {}, max
   const activeToken = getAccessToken();
   const isDemo = url.includes('demo_admin_spreadsheet_id') || url.includes('demo_classes_spreadsheet_id') || url.includes('admin_local_spreadsheet_id');
 
-  // If using Admin Login without Google OAuth token, or demo spreadsheet
-  if (isDemo || !activeToken || activeToken === 'dummy_token_for_email_login') {
+  if (!isDemo && (!activeToken || activeToken === 'dummy_token_for_email_login')) {
+    throw new SheetsApiError('Connect your Google account in Settings to read and edit this spreadsheet.');
+  }
+
+  // Keep the local demo store only for explicit demo spreadsheet IDs.
+  if (isDemo) {
     try {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -2169,7 +2173,7 @@ export interface DashboardSummary {
 export async function getDashboardSummary(spreadsheetId: string): Promise<DashboardSummary> {
   const meta = await getSpreadsheetMetadata(spreadsheetId);
   
-  const classesSheet = meta.sheets.find((s: any) => s.properties.title.toLowerCase() === 'classes') || meta.sheets[0];
+  const classesSheet = meta.sheets.find((s: any) => ['class', 'classes'].includes(s.properties.title.toLowerCase())) || meta.sheets[0];
   const stockSheet = meta.sheets.find((s: any) => s.properties.title.toLowerCase() === 'stock room');
 
   const classesTabName = classesSheet?.properties?.title || 'Sheet1';

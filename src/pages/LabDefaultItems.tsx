@@ -24,6 +24,7 @@ export function LabDefaultItems() {
   const [modifiedRows, setModifiedRows] = useState<Set<number>>(new Set());
   const [templateSheetId, setTemplateSheetId] = useState<number | null>(null);
   const [itemToDelete, setItemToDelete] = useState<number | null>(null);
+  const [newlyAddedRow, setNewlyAddedRow] = useState<number | null>(null);
   const [customDropdowns, setCustomDropdowns] = useState<CustomDropdowns>({ tags: [], typesByTag: {} });
 
   const loadTemplate = async () => {
@@ -172,7 +173,16 @@ export function LabDefaultItems() {
     const newRow = items.length > 0 ? Math.max(...items.map(i => i.row)) + 1 : 2;
     setItems(prev => [...prev, { row: newRow, name: 'New Default Item', tag: 'Peripheral', type: '' }]);
     setModifiedRows(prevMod => new Set(prevMod).add(newRow));
+    setNewlyAddedRow(newRow);
   };
+
+  useEffect(() => {
+    if (newlyAddedRow === null) return;
+    const input = document.querySelector<HTMLInputElement>(`[data-template-row="${newlyAddedRow}"]`);
+    input?.focus();
+    input?.select();
+    setNewlyAddedRow(null);
+  }, [newlyAddedRow, items]);
 
   const handleDelete = (rowIndex: number) => {
     setItemToDelete(rowIndex);
@@ -285,51 +295,52 @@ export function LabDefaultItems() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-10rem)] sm:h-auto max-w-2xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <Link to="/" className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400">
-            <ChevronLeft className="w-6 h-6" />
-          </Link>
-          <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Lab Default Items</h2>
-        </div>
-        <div className="flex gap-2">
+    <div className="inventory-setup-page inventory-template-page">
+      <header className="inventory-setup-hero nova-panel">
+        <Link to="/" aria-label="Back to dashboard" className="inventory-setup-back"><ChevronLeft size={18} /></Link>
+        <span className="inventory-setup-kicker">LAB TEMPLATE</span>
+        <h1>Lab default items</h1>
+        <p>These items are added automatically when you create a class whose name starts with “Lab.” Edit the list to match your lab equipment.</p>
+        <div className="inventory-setup-example"><span>WHEN USED</span><strong>Create “Lab 102”</strong><span>→</span><strong>These items appear</strong></div>
+      </header>
+      <div className="inventory-template-actions nova-panel">
+        <div><strong>{items.filter(item => item.name).length} lab default items</strong><span>{modifiedRows.size ? `${modifiedRows.size} unsaved change${modifiedRows.size === 1 ? '' : 's'}` : 'All changes saved'}</span></div>
+        <div className="inventory-template-buttons">
           <button
             onClick={handleAddNew}
-            className="flex items-center gap-2 px-4 py-2 bg-white/60 dark:bg-slate-800/60 backdrop-blur-md border border-white/40 dark:border-white/10 text-slate-700 dark:text-slate-300 font-semibold rounded-full hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm text-sm"
+            className="inventory-setup-outline"
           >
             <Plus className="w-4 h-4" />
-            Add
+            Add item
           </button>
           <button
             onClick={handleSave}
             disabled={saving || modifiedRows.size === 0}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-full shadow-md transition-all text-sm",
-              (saving || modifiedRows.size === 0) ? "opacity-50 cursor-not-allowed" : "hover:bg-indigo-700 hover:shadow-lg"
-            )}
+            className="inventory-setup-primary"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Save
+            {saving ? 'Saving...' : 'Save changes'}
           </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto min-h-0 bg-white/70 dark:bg-slate-900/60 backdrop-blur-2xl rounded-[32px] shadow-sm border border-slate-200 dark:border-slate-700/50 divide-y divide-slate-100 dark:divide-slate-700/50">
+      <div className="inventory-template-list nova-panel">
         {items.filter(i => i.name).length === 0 ? (
-          <div className="p-8 text-center text-slate-500 dark:text-slate-400">No default items found.</div>
+          <div className="inventory-setup-empty">No lab default items yet. Tap “Add item” to build the lab template.</div>
         ) : (
           items.map((item, idx) => {
             if (!item.name) return null;
             const ItemIcon = getItemIcon(item.name || "", item.tag || "", item.type || "");
             return (
-            <div key={`${item.row}-${idx}`} className="flex flex-col gap-3 py-4 px-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+            <div key={`${item.row}-${idx}`} className="inventory-template-item">
               <div className="flex items-start">
                 <div className="flex items-center justify-center p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 shrink-0 mr-2">
                   <ItemIcon className="w-4 h-4" />
                 </div>
                 <input
                   type="text"
+                  data-template-row={item.row}
+                  aria-label={`Item name ${idx + 1}`}
                   value={item.name}
                   onChange={(e) => handleNameChange(idx, e.target.value)}
                   placeholder="Item Name"
@@ -340,22 +351,23 @@ export function LabDefaultItems() {
                 />
                 <button
                   onClick={() => handleDelete(idx)}
-                  className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors ml-2 shrink-0"
+                  className="inventory-template-remove"
                   title="Remove default item"
+                  aria-label={`Remove ${item.name}`}
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
-              <div className="flex items-center gap-2">
-                <TagInput 
+              <div className="inventory-template-fields">
+                <label><span>Category</span><TagInput
                   value={item.tag} 
                   onChange={(val) => handleTagChange(idx, val)} 
                   isActive={modifiedRows.has(item.row)}
                   existingTags={existingTags}
                   customTags={customDropdowns.tags}
                   onAddCustom={handleAddCustomTag}
-                />
-                <TypeInput 
+                /></label>
+                <label><span>Type / model</span><TypeInput
                   value={item.type} 
                   tagValue={(item.tag || "Other").trim()} 
                   onChange={(val) => handleTypeChange(idx, val)} 
@@ -363,7 +375,7 @@ export function LabDefaultItems() {
                   existingTypes={existingTypesByTag[(item.tag || "Other").trim()] || []}
                   customTypes={customDropdowns.typesByTag[(item.tag || "Other").trim()] || []}
                   onAddCustom={handleAddCustomType}
-                />
+                /></label>
               </div>
             </div>
           )})

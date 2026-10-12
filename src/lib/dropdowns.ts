@@ -177,6 +177,6 @@ export async function addMergedCustomType(tag: string, type: string): Promise<vo
 export async function updateMergedAllDropdowns(dropdowns: CustomDropdowns): Promise<void> {
   const classesId = localStorage.getItem('quickStock_classesSheetId');
   const stockId = localStorage.getItem('quickStock_classesSheetId');
-  if (classesId) await updateAllDropdowns(classesId, dropdowns).catch(() => {});
-  if (stockId && stockId !== classesId) await updateAllDropdowns(stockId, dropdowns).catch(() => {});
+  if (classesId) await updateAllDropdowns(classesId, dropdowns);
+  if (stockId && stockId !== classesId) await updateAllDropdowns(stockId, dropdowns);
 }

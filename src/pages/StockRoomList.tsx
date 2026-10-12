@@ -154,13 +154,13 @@ export function StockRoomList() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="inventory-page space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Stock Room Locations</h1>
           <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Select a room to manage its inventory.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {sheetId && (
             <>
               <button 
@@ -174,7 +174,7 @@ export function StockRoomList() {
               </button>
               <button 
                 onClick={() => setIsAdding(true)}
-                className="px-4 py-2.5 rounded-full text-white bg-indigo-600 font-bold hover:bg-indigo-700 transition-colors shadow-sm text-sm flex items-center gap-2"
+                className="px-4 py-2.5 rounded-full text-white bg-gradient-to-r from-blue-500 to-cyan-400 font-bold hover:from-blue-600 hover:to-cyan-500 transition-colors shadow-sm text-sm flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 Add Location

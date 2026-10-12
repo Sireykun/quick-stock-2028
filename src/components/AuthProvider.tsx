@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from 'firebase/auth';
 import { initAuth, googleSignIn, emailSignIn, emailSignUp, linkGoogleAccount, logout as signOutUser } from '../lib/auth';
+import { DEFAULT_SPREADSHEET_ID } from '../lib/config';
 
 interface AuthContextType {
   user: User | null;
@@ -35,6 +36,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = initAuth(
       (user, token) => {
+        if (!localStorage.getItem('quickStock_classesSheetId') || localStorage.getItem('quickStock_classesSheetId') === 'admin_local_spreadsheet_id') {
+          localStorage.setItem('quickStock_classesSheetId', DEFAULT_SPREADSHEET_ID);
+        }
         setUser(user);
         setHasGoogleAccess(token !== 'dummy_token_for_email_login');
         setLoading(false);
@@ -72,8 +76,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (result) {
         setUser(result.user);
         setHasGoogleAccess(false);
-        localStorage.setItem('quickStock_classesSheetId', 'admin_local_spreadsheet_id');
-        localStorage.setItem('quickStock_stockSheetId', 'admin_local_spreadsheet_id');
+        if (!localStorage.getItem('quickStock_classesSheetId') || localStorage.getItem('quickStock_classesSheetId') === 'admin_local_spreadsheet_id') {
+          localStorage.setItem('quickStock_classesSheetId', DEFAULT_SPREADSHEET_ID);
+        }
       }
     } catch (error: any) {
       alert(error.message || 'Failed to sign in with credentials.');
@@ -90,8 +95,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (result) {
         setUser(result.user);
         setHasGoogleAccess(false);
-        localStorage.setItem('quickStock_classesSheetId', 'admin_local_spreadsheet_id');
-        localStorage.setItem('quickStock_stockSheetId', 'admin_local_spreadsheet_id');
+        if (!localStorage.getItem('quickStock_classesSheetId') || localStorage.getItem('quickStock_classesSheetId') === 'admin_local_spreadsheet_id') {
+          localStorage.setItem('quickStock_classesSheetId', DEFAULT_SPREADSHEET_ID);
+        }
       }
     } catch (error: any) {
       alert(error.message || 'Failed to register with email.');
