@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "Quick Stock",
+  "short_name": "Quick Stock",
+  "description": "Manage stock rooms, classes, and on-site inventory.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#e9f5fc",
+  "theme_color": "#e9f5fc",
+  "icons": [
+    { "src": "/quick-stock-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/quick-stock-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/quick-stock-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "ON Inventory", "url": "/on-inventory" },
+    { "name": "Classes", "url": "/classes" }
+  ]
+}

@@ -8,6 +8,7 @@ import {
   Sun,
   KeyRound,
   Check,
+  Download,
 } from "lucide-react";
 import {
   getSpreadsheetMetadata,
@@ -18,8 +19,52 @@ import {
 import { useTheme } from "../components/ThemeProvider";
 import { authorizeGoogleSheets, getAccessToken } from "../lib/auth";
 import { DEFAULT_SPREADSHEET_ID } from "../lib/config";
+import { canPromptInstall, promptInstall } from "../lib/install";
 
 const spreadsheetIdFromInput = (value: string) => value.match(/\/spreadsheets\/d\/([A-Za-z0-9_-]+)/)?.[1] || value.trim();
+
+function InstallAppCard() {
+  const [canInstall, setCanInstall] = useState(canPromptInstall);
+  const [installed, setInstalled] = useState(() => window.matchMedia('(display-mode: standalone)').matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone));
+  const [installing, setInstalling] = useState(false);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  useEffect(() => {
+    const update = () => {
+      setCanInstall(canPromptInstall());
+      setInstalled(window.matchMedia('(display-mode: standalone)').matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone));
+    };
+    window.addEventListener('quick-stock-install-ready', update);
+    window.addEventListener('appinstalled', update);
+    return () => {
+      window.removeEventListener('quick-stock-install-ready', update);
+      window.removeEventListener('appinstalled', update);
+    };
+  }, []);
+
+  const handleInstall = async () => {
+    setInstalling(true);
+    try {
+      await promptInstall();
+    } finally {
+      setCanInstall(canPromptInstall());
+      setInstalling(false);
+    }
+  };
+
+  return (
+    <section id="install-app" className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/30 rounded-3xl shadow-sm">
+      <div>
+        <h2 className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-white"><Download className="w-5 h-5 text-sky-600 dark:text-sky-400" /> Use Quick Stock as an app</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
+          {installed ? 'Quick Stock is on your home screen.' : isIOS ? 'On iPhone, open this site in Safari, tap Share, then Add to Home Screen.' : canInstall ? 'Add Quick Stock to your home screen for one-tap access.' : 'In your browser menu, choose Install app or Add to Home screen.'}
+        </p>
+        {!installed && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Google Sheets inventory needs an internet connection.</p>}
+      </div>
+      {!installed && canInstall && <button type="button" onClick={handleInstall} disabled={installing} className="shrink-0 min-h-11 px-5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-bold disabled:opacity-50">{installing ? 'Opening install...' : 'Install app'}</button>}
+    </section>
+  );
+}
 
 export function Settings() {
   const [stockSheetId, setStockSheetId] = useState("");
@@ -135,6 +180,8 @@ export function Settings() {
           Create Starter Sheets
         </button>
       </div>
+
+      <InstallAppCard />
 
       <form
         onSubmit={handleSave}
