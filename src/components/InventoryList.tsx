@@ -350,6 +350,7 @@ export function InventoryList({
   const [itemToDelete, setItemToDelete] = useState<number | null>(null);
   const [scannerOpenIdx, setScannerOpenIdx] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedStockItemRow, setSelectedStockItemRow] = useState<number | null>(null);
   const navigate = useNavigate();
 
   const [modifiedRows, setModifiedRows] = useState<Set<number>>(new Set());
@@ -1041,6 +1042,7 @@ export function InventoryList({
   });
 
   const groupedItems = { All: filteredItems };
+  const selectedStockItem = filteredItems.find(item => item.row === selectedStockItemRow) || filteredItems[0];
 
   const pieData = React.useMemo(() => {
     if (type !== "stock") return [];
@@ -1565,13 +1567,38 @@ export function InventoryList({
               </p>
             </div>
           ) : (
-            <div className="">
-              {
-                <div className="divide-y divide-slate-100 dark:divide-slate-700/50 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white/60 dark:bg-slate-800/60">
-                  {filteredItems.map((item, idx) => renderItemCard(item, idx))}
+            type === "stock" ? (
+              <div>
+                <div className="stock-item-grid" aria-label="Items in stock room">
+                  {filteredItems.map(item => {
+                    const ItemIcon = getItemIcon(item.item || '', item.tag || '', item.type || '');
+                    return <button
+                      type="button"
+                      key={item.row}
+                      className={`stock-item-tile ${selectedStockItem?.row === item.row ? 'stock-item-tile-active' : ''}`}
+                      onClick={() => {
+                        setSelectedStockItemRow(item.row);
+                        requestAnimationFrame(() => document.getElementById('stock-item-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+                      }}
+                      aria-pressed={selectedStockItem?.row === item.row}
+                    >
+                      <span className="stock-item-tile-icon"><ItemIcon size={27} strokeWidth={1.5} /></span>
+                      <strong>{item.item}</strong>
+                      <span>{item.tag || 'Uncategorized'}</span>
+                      <b>Qty {item.quantity || '0'}</b>
+                    </button>;
+                  })}
                 </div>
-              }
-            </div>
+                {selectedStockItem && <div id="stock-item-editor" className="stock-item-editor">
+                  <div className="stock-item-editor-heading"><strong>Edit {selectedStockItem.item}</strong><span>Change details below, then submit to Sheets.</span></div>
+                  {renderItemCard(selectedStockItem, 0)}
+                </div>}
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-700/50 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white/60 dark:bg-slate-800/60">
+                {filteredItems.map((item, idx) => renderItemCard(item, idx))}
+              </div>
+            )
           )}
 
           <div className="mt-4 pt-4 border-t border-slate-100 px-2 sm:px-4">

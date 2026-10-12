@@ -2,12 +2,14 @@ import { FluidSpinner } from "../components/FluidSpinner";
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getSpreadsheetMetadata, getLocations, formatStockColors, SheetRow, getInventory, getAllClassesAndItems as getAllLocationsAndItems, addClassToInventory } from '../lib/sheets';
-import { RefreshCw, AlertCircle, Layers, ChevronRight, Plus, X, CheckCheck, Search, Palette, ArrowDownAZ, ArrowUpAZ, ArrowUpDown, FileText, Printer, Copy } from 'lucide-react';
+import { RefreshCw, AlertCircle, Layers, ChevronRight, Plus, X, CheckCheck, Search, Palette, ArrowDownAZ, ArrowUpAZ, ArrowUpDown, FileText, Printer, Copy, Warehouse } from 'lucide-react';
+import { getRoomPhotos } from '../lib/roomPhotos';
 
 export function StockRoomList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [locations, setLocations] = useState<{ title: string, isChecked: boolean }[]>([]);
+  const [roomPhotos, setRoomPhotos] = useState<Record<string, string>>({});
   const [isAdding, setIsAdding] = useState(false);
   const [newLocationName, setNewLocationName] = useState('');
   const [addingStatus, setAddingStatus] = useState<'idle' | 'saving' | 'error'>('idle');
@@ -47,8 +49,12 @@ export function StockRoomList() {
       setMainTabName(tabName);
       setActualSheetNumericalId(stockSheet?.properties?.sheetId ?? null);
       
-      const locationData = await getLocations(sheetId, tabName);
+      const [locationData, photos] = await Promise.all([
+        getLocations(sheetId, tabName),
+        getRoomPhotos(sheetId).catch(error => { console.warn('Could not load room photos', error); return {}; }),
+      ]);
       setLocations(locationData);
+      setRoomPhotos(photos);
     } catch (err: any) {
       setError(err.message || 'Failed to load locations.');
     } finally {
@@ -157,8 +163,8 @@ export function StockRoomList() {
     <div className="inventory-page space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Stock Room Locations</h1>
-          <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Select a room to manage its inventory.</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Stock locations</h1>
+          <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Tap a square to open a room and its items.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {sheetId && (
@@ -293,41 +299,20 @@ export function StockRoomList() {
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Try a different search term.</p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="stock-location-grid">
           {sortedLocations.map((cls) => (
-            cls.isChecked ? (
-              <Link
-                key={cls.title}
-                to={`/stock-room/${encodeURIComponent(cls.title)}`}
-                className="group p-5 rounded-2xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 shadow-sm hover:shadow-md flex items-center justify-between"
-                aria-label={`${cls.title}, done`}
-              >
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className="p-3 rounded-xl bg-emerald-100 dark:bg-emerald-900/50">
-                    <CheckCheck className="w-6 h-6 text-emerald-700 dark:text-emerald-300" />
-                  </div>
-                  <h3 className="font-bold text-emerald-950 dark:text-emerald-100 truncate">{cls.title}</h3>
-                </div>
-                <div className="flex items-center gap-3 shrink-0 pl-2">
-                  <span className="text-xs font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-900/60 px-2.5 py-1 rounded-full">Done</span>
-                  <ChevronRight className="w-5 h-5 text-emerald-700 dark:text-emerald-300" />
-                </div>
-              </Link>
-            ) : (
-              <Link 
-                key={cls.title}
-                to={`/stock-room/${encodeURIComponent(cls.title)}`}
-                className="group p-5 rounded-2xl border shadow-sm transition-all flex items-center justify-between bg-white/60 dark:bg-slate-800/60 border-white/40 dark:border-white/10 backdrop-blur-md hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-500"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl transition-colors bg-indigo-50 dark:bg-indigo-900/20 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/40">
-                    <Layers className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-                  </div>
-                  <h3 className="font-bold text-slate-800 dark:text-slate-100">{cls.title}</h3>
-                </div>
-                <ChevronRight className="w-5 h-5 transition-colors text-slate-400 dark:text-slate-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400" />
-              </Link>
-            )
+            <Link
+              key={cls.title}
+              to={`/stock-room/${encodeURIComponent(cls.title)}`}
+              className={`stock-location-tile ${cls.isChecked ? 'stock-location-tile-done' : ''}`}
+              aria-label={`${cls.title}${cls.isChecked ? ', done' : ''}`}
+            >
+              {roomPhotos[cls.title.trim().toLocaleLowerCase()]
+                ? <img className="stock-location-tile-photo" src={roomPhotos[cls.title.trim().toLocaleLowerCase()]} alt="" loading="lazy" />
+                : <span className="stock-location-tile-icon"><Warehouse size={33} strokeWidth={1.5} /></span>}
+              <strong>{cls.title}</strong>
+              <span className="stock-location-tile-footer">{cls.isChecked ? <><CheckCheck size={15} /> Done</> : 'Open room'} <ChevronRight size={16} /></span>
+            </Link>
           ))}
         </div>
       )}
