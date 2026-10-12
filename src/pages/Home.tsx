@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Activity, ArrowRight, Box, CheckCircle2, ChevronRight, Folder, Layers, Package, Sparkles, Tag } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowRight, Box, CheckCircle2, ChevronRight, Folder, Layers, Package, Sparkles, Tag } from 'lucide-react';
 import { getDashboardSummary, DashboardSummary } from '../lib/sheets';
 import { getItemIcon } from '../lib/utils';
 
@@ -31,6 +31,22 @@ export function Home() {
   const totalItems = summary ? summary.classes.totalItems + summary.stock.totalItems : 0;
   const checkedItems = summary ? summary.classes.checkedItems + summary.stock.checkedItems : 0;
   const verifiedPercent = totalItems ? Math.round((checkedItems / totalItems) * 100) : 0;
+  const missingAlerts = summary?.missingTemplateAlerts || [];
+  const renderMissingAlerts = (duplicate = false) => missingAlerts.map(alert => (
+    <Link
+      key={alert.room}
+      to={`/classes/${encodeURIComponent(alert.room)}`}
+      className="nova-alert-item"
+      tabIndex={duplicate ? -1 : undefined}
+      aria-label={`${alert.room}: missing ${alert.missingItems.join(', ')}`}
+    >
+      <AlertTriangle size={16} aria-hidden="true" />
+      <strong>{alert.room}</strong>
+      <span className="nova-alert-kind">{alert.template === 'lab' ? 'Lab defaults' : 'Class defaults'}</span>
+      <span className="nova-alert-detail">Missing {alert.missingItems.join(', ')}</span>
+      <ChevronRight size={15} aria-hidden="true" />
+    </Link>
+  ));
 
   return (
     <div className="nova-dashboard">
@@ -54,6 +70,20 @@ export function Home() {
           <div className="nova-art-label">DESIGNED FOR CLARITY · BUILT FOR CONTROL</div>
         </div>
       </section>
+
+      {summary && (
+        <section className="nova-alerts nova-panel" aria-label="Rooms missing default items">
+          <div className="nova-alerts-heading"><AlertTriangle size={16} /><strong>ROOM ALERTS</strong><span>{summary.templateAlertsError ? 'Could not check all defaults' : `${missingAlerts.length} ${missingAlerts.length === 1 ? 'room' : 'rooms'} need attention`}</span></div>
+          {missingAlerts.length ? (
+            <div className="nova-alert-window">
+              <div className="nova-alert-track" style={{ animationDuration: `${Math.max(18, missingAlerts.length * 6)}s` }}>
+                <div className="nova-alert-group">{renderMissingAlerts()}</div>
+                <div className="nova-alert-group" aria-hidden="true">{renderMissingAlerts(true)}</div>
+              </div>
+            </div>
+          ) : <p className="nova-alert-clear">{summary.templateAlertsError ? 'Refresh the page to check room defaults again.' : 'No missing default items found in classes or labs.'}</p>}
+        </section>
+      )}
 
       <section className="nova-stats nova-panel" aria-label="Inventory statistics">
         <div className="nova-stat"><Package size={19} /><strong>{summary ? totalItems : '—'}</strong><span>Total assets<br />tracked</span></div>

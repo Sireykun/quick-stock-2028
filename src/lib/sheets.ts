@@ -2171,6 +2171,8 @@ export interface DashboardSummary {
   };
   items: { name: string, quantity: number, inStock: number, inClasses: number, tag: string, type: string }[];
   tags: { name: string, quantity: number }[];
+  missingTemplateAlerts: { room: string, template: 'class' | 'lab', missingItems: string[] }[];
+  templateAlertsError: boolean;
 }
 
 export async function getDashboardSummary(spreadsheetId: string): Promise<DashboardSummary> {
@@ -2186,13 +2188,25 @@ export async function getDashboardSummary(spreadsheetId: string): Promise<Dashbo
     classes: { totalItems: 0, checkedItems: 0 },
     stock: { totalItems: 0, checkedItems: 0 },
     items: [],
-    tags: []
+    tags: [],
+    missingTemplateAlerts: [],
+    templateAlertsError: false,
   };
 
   const itemMap = new Map<string, { quantity: number, inStock: number, inClasses: number, tag: string, type: string }>();
   const tagMap = new Map<string, number>();
 
-  const [classesMap, stockMap] = await Promise.all([
+  const readSavedTemplate = async (name: 'Class_Template' | 'Lab_Template'): Promise<string[]> => {
+    if (!meta.sheets.some(sheet => sheet.properties.title === name)) return [];
+    const range = encodeURIComponent(`'${name}'!A2:C`);
+    const data = await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`);
+    return (data.values || [])
+      .filter((row: string[]) => !isHeaderRow(row))
+      .map((row: string[]) => String(row[0] || '').trim())
+      .filter(Boolean);
+  };
+
+  const [classesMap, stockMap, classTemplateResult, labTemplateResult] = await Promise.all([
     getAllClassesAndItems(spreadsheetId, classesTabName).catch((error) => {
       console.error('Failed to load classes data for dashboard', error);
       return {} as Record<string, SheetRow[]>;
@@ -2203,7 +2217,30 @@ export async function getDashboardSummary(spreadsheetId: string): Promise<Dashbo
           return {} as Record<string, SheetRow[]>;
         })
       : Promise.resolve({} as Record<string, SheetRow[]>),
+    readSavedTemplate('Class_Template').then(items => ({ items, error: false })).catch(error => {
+      console.error('Failed to load class defaults for dashboard', error);
+      return { items: [] as string[], error: true };
+    }),
+    readSavedTemplate('Lab_Template').then(items => ({ items, error: false })).catch(error => {
+      console.error('Failed to load lab defaults for dashboard', error);
+      return { items: [] as string[], error: true };
+    }),
   ]);
+
+  result.templateAlertsError = classTemplateResult.error || labTemplateResult.error;
+  const normalizeItem = (value: string) => value.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+  for (const [room, rows] of Object.entries(classesMap)) {
+    if (room === 'Uncategorized') continue;
+    const isLab = room.trim().toLocaleLowerCase().startsWith('lab');
+    const template = isLab ? labTemplateResult : classTemplateResult;
+    if (template.error || template.items.length === 0) continue;
+    const present = new Set(rows.filter(row => !row._isDeleted).map(row => normalizeItem(row.item)));
+    const missingItems = [...new Map(template.items.map(item => [normalizeItem(item), item])).entries()]
+      .filter(([key]) => !present.has(key))
+      .map(([, label]) => label);
+    if (missingItems.length) result.missingTemplateAlerts.push({ room, template: isLab ? 'lab' : 'class', missingItems });
+  }
+  result.missingTemplateAlerts.sort((a, b) => b.missingItems.length - a.missingItems.length || a.room.localeCompare(b.room));
 
   // Fetch Classes
   for (const [_, rows] of Object.entries(classesMap)) {
