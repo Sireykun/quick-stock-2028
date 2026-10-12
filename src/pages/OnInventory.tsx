@@ -4,6 +4,7 @@ import { AlertCircle, ArrowRight, Box, Camera, Check, CheckCircle2, ChevronRight
 import { addClassToInventory, addItemToClass, appendInventoryItem, getClassInventory, getClassLastRow, getClasses, getSpreadsheetMetadata, SheetRow, updateClassInventory } from '../lib/sheets';
 import { BarcodeScanner } from '../components/BarcodeScanner';
 import { FluidSpinner } from '../components/FluidSpinner';
+import { SearchableSelect } from '../components/SearchableSelect';
 
 type Area = 'stock' | 'class';
 const isChecked = (row: SheetRow) => ['checked', 'ok', 'yes'].includes((row.status || '').trim().toLowerCase());
@@ -210,10 +211,7 @@ export function OnInventory() {
           </div>
           <label className="on-inventory-label" htmlFor="on-inventory-location">Location</label>
           <div className="on-inventory-location-row">
-            <select id="on-inventory-location" value={location} disabled={loadingLocations || creatingLocation} onChange={event => { setLocation(event.target.value); setAdding(false); setNewItem(emptyItem(event.target.value)); setNotice(null); }}>
-              <option value="">{loadingLocations ? 'Loading locations...' : 'Choose a location'}</option>
-              {locations.map(name => <option key={name} value={name}>{name}</option>)}
-            </select>
+            <SearchableSelect id="on-inventory-location" aria-label="Location" value={location} disabled={loadingLocations || creatingLocation} placeholder={loadingLocations ? 'Loading locations...' : 'Choose a location'} searchPlaceholder="Search locations..." options={locations.map(name => ({ value: name, label: name }))} onChange={value => { setLocation(value); setAdding(false); setNewItem(emptyItem(value)); setNotice(null); }} />
             <button type="button" title="Refresh locations" aria-label="Refresh locations" onClick={() => setReloadKey(key => key + 1)} disabled={loadingLocations}><RefreshCw size={19} /></button>
           </div>
           {!isCreatingLocation ? <button type="button" className="on-inventory-create-link" onClick={() => { setIsCreatingLocation(true); setError(null); }} disabled={loadingLocations || !tabName}><Plus size={17} /> Add {area === 'class' ? 'class' : 'stock room'}</button> :

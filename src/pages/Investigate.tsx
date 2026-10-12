@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { 
   Search, ShieldAlert, CheckCircle2, AlertTriangle, FileText, 
   Package, MapPin, RefreshCw, Filter, Download, ArrowRight, HelpCircle
@@ -360,16 +361,13 @@ export function Investigate() {
                       </td>
 
                       <td className="py-4 px-6 text-right">
-                        <select
+                        <SearchableSelect
+                          aria-label="Item status"
                           value={currentStatus}
-                          onChange={(e) => handleStatusChange(itemKey, e.target.value)}
+                          onChange={(nextValue) => handleStatusChange(itemKey, nextValue)}
                           className="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 outline-none"
-                        >
-                          <option value="Unchecked">Unchecked</option>
-                          <option value="Checked">Checked (Verified)</option>
-                          <option value="Under Review">Under Review</option>
-                          <option value="Missing">Flagged Missing</option>
-                        </select>
+                          options={[{ value: 'Unchecked', label: 'Unchecked' }, { value: 'Checked', label: 'Checked (Verified)' }, { value: 'Under Review', label: 'Under Review' }, { value: 'Missing', label: 'Flagged Missing' }]}
+                        />
                       </td>
                     </tr>
                   );

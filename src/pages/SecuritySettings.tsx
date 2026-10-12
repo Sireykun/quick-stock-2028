@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { 
   Shield, Key, Lock, CheckCircle2, AlertTriangle, UserCheck, 
   RefreshCw, LogOut, ShieldCheck, Eye, EyeOff, KeyRound, Server
@@ -132,17 +133,13 @@ export function SecuritySettings() {
             <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
               Inactivity Session Timeout (Minutes)
             </label>
-            <select
+            <SearchableSelect
+              aria-label="Inactivity session timeout"
               value={sessionTimeout}
-              onChange={(e) => setSessionTimeout(e.target.value)}
+              onChange={setSessionTimeout}
               className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="15">15 Minutes</option>
-              <option value="30">30 Minutes</option>
-              <option value="60">60 Minutes (Default)</option>
-              <option value="240">4 Hours</option>
-              <option value="1440">24 Hours</option>
-            </select>
+              options={[{ value: '15', label: '15 Minutes' }, { value: '30', label: '30 Minutes' }, { value: '60', label: '60 Minutes (Default)' }, { value: '240', label: '4 Hours' }, { value: '1440', label: '24 Hours' }]}
+            />
             <p className="text-xs text-slate-400">Automatically logout inactive administrators after this duration.</p>
           </div>
 

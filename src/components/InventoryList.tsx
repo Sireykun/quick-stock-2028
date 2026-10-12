@@ -1,4 +1,5 @@
 import { FluidSpinner } from "./FluidSpinner";
+import { SearchableSelect } from "./SearchableSelect";
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -186,14 +187,15 @@ export function TagInput({
   }
 
   return (
-    <select
+    <SearchableSelect
+      aria-label="Category / tag"
       value={value || ""}
-      onChange={(e) => {
-        if (e.target.value === "__ADD_NEW__") {
+      onChange={(nextValue) => {
+        if (nextValue === "__ADD_NEW__") {
           setIsCustom(true);
           setLocalValue("");
         } else {
-          onChange(e.target.value);
+          onChange(nextValue);
         }
       }}
       className={cn(
@@ -202,29 +204,10 @@ export function TagInput({
           ? "border-indigo-300 bg-indigo-50/50 text-indigo-700 dark:bg-indigo-500/20 dark:border-indigo-500/30 dark:text-indigo-300"
           : "border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 text-slate-700 dark:text-slate-200",
       )}
-    >
-      <option
-        value=""
-        className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-      >
-        -- Select Tag --
-      </option>
-      {options.map((opt) => (
-        <option
-          key={opt}
-          value={opt}
-          className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-        >
-          {opt}
-        </option>
-      ))}
-      <option
-        value="__ADD_NEW__"
-        className="font-bold text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-800"
-      >
-        + Type Custom Tag...
-      </option>
-    </select>
+      placeholder="Select tag"
+      searchPlaceholder="Search categories..."
+      options={[{ value: '', label: '-- Select Tag --' }, ...options.map(opt => ({ value: opt, label: opt })), { value: '__ADD_NEW__', label: '+ Type Custom Tag...' }]}
+    />
   );
 }
 
@@ -287,16 +270,17 @@ export function TypeInput({
   }
 
   return (
-    <select
+    <SearchableSelect
+      aria-label="Type / model"
       value={value || ""}
-      onChange={(e) => {
-        if (e.target.value === "__ADD_NEW__") {
+      onChange={(nextValue) => {
+        if (nextValue === "__ADD_NEW__") {
           setIsCustom(true);
           setLocalValue("");
-        } else if (e.target.value === "__MANAGE__") {
+        } else if (nextValue === "__MANAGE__") {
           navigate("/types");
         } else {
-          onChange(e.target.value);
+          onChange(nextValue);
         }
       }}
       className={cn(
@@ -305,35 +289,10 @@ export function TypeInput({
           ? "border-indigo-300 bg-indigo-50/50 text-indigo-700 dark:bg-indigo-500/20 dark:border-indigo-500/30 dark:text-indigo-300"
           : "border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 focus:border-indigo-400 dark:focus:border-indigo-500 text-slate-700 dark:text-slate-200",
       )}
-    >
-      <option
-        value=""
-        className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-      >
-        -- Select Type --
-      </option>
-      {options.map((opt) => (
-        <option
-          key={opt}
-          value={opt}
-          className="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-        >
-          {opt}
-        </option>
-      ))}
-      <option
-        value="__ADD_NEW__"
-        className="font-bold text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-800"
-      >
-        + Type Custom Type...
-      </option>
-      <option
-        value="__MANAGE__"
-        className="font-bold text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800"
-      >
-        ⚙️ Manage Types...
-      </option>
-    </select>
+      placeholder="Select type"
+      searchPlaceholder="Search types..."
+      options={[{ value: '', label: '-- Select Type --' }, ...options.map(opt => ({ value: opt, label: opt })), { value: '__ADD_NEW__', label: '+ Type Custom Type...' }, { value: '__MANAGE__', label: 'Manage Types...' }]}
+    />
   );
 }
 
@@ -1263,37 +1222,19 @@ export function InventoryList({
               <div className="flex flex-col gap-2 w-full max-w-[200px]">
                 {(item.tag === "Interactive" ||
                   item.type?.toLowerCase().includes("interactive")) && (
-                  <select
+                  <SearchableSelect
+                    aria-label="Enrollment"
                     value={item.hostname || ""}
-                    onChange={(e) =>
-                      handleHostnameChange(item.row, e.target.value)
-                    }
+                    onChange={(nextValue) => handleHostnameChange(item.row, nextValue)}
                     className={cn(
                       "w-full text-xs px-2.5 py-1.5 rounded-lg outline-none transition-all border cursor-pointer",
                       modifiedRows.has(item.row)
                         ? "border-indigo-300 bg-indigo-50/50 text-indigo-900 dark:bg-indigo-500/20 dark:border-indigo-500/30 dark:text-indigo-300"
                         : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:border-indigo-400 dark:focus:border-indigo-500",
                     )}
-                  >
-                    <option
-                      value=""
-                      className="bg-white/60 dark:bg-slate-800/60 text-slate-900 dark:text-slate-100"
-                    >
-                      -- Enrollment --
-                    </option>
-                    <option
-                      value="Enroll"
-                      className="bg-white/60 dark:bg-slate-800/60 text-slate-900 dark:text-slate-100"
-                    >
-                      Enroll
-                    </option>
-                    <option
-                      value="Unenroll"
-                      className="bg-white/60 dark:bg-slate-800/60 text-slate-900 dark:text-slate-100"
-                    >
-                      Unenroll
-                    </option>
-                  </select>
+                    placeholder="Enrollment"
+                    options={[{ value: '', label: '-- Enrollment --' }, { value: 'Enroll', label: 'Enroll' }, { value: 'Unenroll', label: 'Unenroll' }]}
+                  />
                 )}
                 <div className="relative w-full flex items-center">
                   <DebouncedInput
@@ -1542,30 +1483,28 @@ export function InventoryList({
                 </div>
                 {type === "stock" && (
                   <div className="relative w-full sm:w-32">
-                    <select
+                    <SearchableSelect
+                      aria-label="Stock room location"
                       value={newItemLocation}
-                      onChange={(e) => setNewItemLocation(e.target.value)}
+                      onChange={setNewItemLocation}
                       className="w-full text-sm font-semibold px-3 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:border-indigo-500 outline-none transition-all dark:bg-slate-800 dark:border-slate-700 dark:text-white"
-                    >
-                      <option value="">No Location</option>
-                      {Object.keys(groupedItems)
+                      placeholder="No Location"
+                      searchPlaceholder="Search locations..."
+                      options={[{ value: '', label: 'No Location' }, ...Object.keys(groupedItems)
                         .filter((k) => k !== "All" && k !== "Uncategorized")
-                        .map((loc) => (
-                          <option key={loc} value={loc}>
-                            {loc}
-                          </option>
-                        ))}
-                    </select>
+                        .map((loc) => ({ value: loc, label: loc }))]}
+                    />
                   </div>
                 )}
                 <div className="relative w-full sm:w-32">
-                  <select
+                  <SearchableSelect
+                    aria-label="Category"
                     value={newItemTag}
-                    onChange={(e) => setNewItemTag(e.target.value)}
+                    onChange={setNewItemTag}
                     className="w-full text-sm font-semibold px-3 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:border-indigo-500 outline-none transition-all dark:bg-slate-800 dark:border-slate-700 dark:text-white"
-                  >
-                    <option value="">Category</option>
-                    {Array.from(
+                    placeholder="Category"
+                    searchPlaceholder="Search categories..."
+                    options={[{ value: '', label: 'Category' }, ...Array.from(
                       new Set(
                         [
                           "Computer",
@@ -1579,12 +1518,8 @@ export function InventoryList({
                           ...(customDropdowns.tags || []),
                         ].filter(Boolean),
                       ),
-                    ).map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
+                    ).map((cat) => ({ value: cat, label: cat }))]}
+                  />
                 </div>
                 <div className="relative w-full sm:w-32">
                   <input
@@ -1670,30 +1605,28 @@ export function InventoryList({
                 </div>
                 {type === "stock" && (
                   <div className="relative w-full sm:w-32">
-                    <select
+                    <SearchableSelect
+                      aria-label="Stock room location"
                       value={newItemLocation}
-                      onChange={(e) => setNewItemLocation(e.target.value)}
+                      onChange={setNewItemLocation}
                       className="w-full text-sm font-semibold px-3 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:border-indigo-500 outline-none transition-all dark:bg-slate-800 dark:border-slate-700 dark:text-white"
-                    >
-                      <option value="">No Location</option>
-                      {Object.keys(groupedItems)
+                      placeholder="No Location"
+                      searchPlaceholder="Search locations..."
+                      options={[{ value: '', label: 'No Location' }, ...Object.keys(groupedItems)
                         .filter((k) => k !== "All" && k !== "Uncategorized")
-                        .map((loc) => (
-                          <option key={loc} value={loc}>
-                            {loc}
-                          </option>
-                        ))}
-                    </select>
+                        .map((loc) => ({ value: loc, label: loc }))]}
+                    />
                   </div>
                 )}
                 <div className="relative w-full sm:w-32">
-                  <select
+                  <SearchableSelect
+                    aria-label="Category"
                     value={newItemTag}
-                    onChange={(e) => setNewItemTag(e.target.value)}
+                    onChange={setNewItemTag}
                     className="w-full text-sm font-semibold px-3 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:border-indigo-500 outline-none transition-all dark:bg-slate-800 dark:border-slate-700 dark:text-white"
-                  >
-                    <option value="">Category</option>
-                    {Array.from(
+                    placeholder="Category"
+                    searchPlaceholder="Search categories..."
+                    options={[{ value: '', label: 'Category' }, ...Array.from(
                       new Set(
                         [
                           "Computer",
@@ -1707,12 +1640,8 @@ export function InventoryList({
                           ...(customDropdowns.tags || []),
                         ].filter(Boolean),
                       ),
-                    ).map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
+                    ).map((cat) => ({ value: cat, label: cat }))]}
+                  />
                 </div>
                 <div className="relative w-full sm:w-32">
                   <input
@@ -1936,27 +1865,21 @@ export function InventoryList({
                     ? availableClasses
                     : availableStocks
                   ).length > 0 ? (
-                    <select
+                    <SearchableSelect
+                      aria-label="Destination"
                       value={moveTargetName}
-                      onChange={(e) => {
-                        setMoveTargetName(e.target.value);
+                      onChange={(nextValue) => {
+                        setMoveTargetName(nextValue);
                         setCustomTargetName("");
                       }}
                       className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-medium text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
-                    >
-                      {(moveTargetType === "Classes"
+                      placeholder="Choose destination"
+                      searchPlaceholder="Search destinations..."
+                      options={(moveTargetType === "Classes"
                         ? availableClasses
                         : availableStocks
-                      ).map((target) => (
-                        <option
-                          key={target}
-                          value={target}
-                          disabled={target === className}
-                        >
-                          {target} {target === className ? "(Current)" : ""}
-                        </option>
-                      ))}
-                    </select>
+                      ).map((target) => ({ value: target, label: `${target}${target === className ? ' (Current)' : ''}`, disabled: target === className }))}
+                    />
                   ) : (
                     <p className="text-xs text-slate-400 italic mb-1">
                       No existing{" "}

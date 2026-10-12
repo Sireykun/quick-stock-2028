@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SearchableSelect } from '../components/SearchableSelect';
 import { 
   History, Search, Filter, Download, Trash2, Shield, RefreshCw, 
   CheckCircle2, AlertTriangle, Info, Lock, Package, ArrowRight
@@ -180,33 +181,24 @@ export function ActivityLogs() {
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-slate-400" />
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Category:</span>
-            <select
+            <SearchableSelect
+              aria-label="Log category"
               value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
+              onChange={setSelectedCategory}
               className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none"
-            >
-              <option value="All">All Categories</option>
-              <option value="Inventory">Inventory</option>
-              <option value="Security">Security</option>
-              <option value="System">System</option>
-              <option value="Restore">Restore</option>
-              <option value="Admin">Admin</option>
-            </select>
+              options={[{ value: 'All', label: 'All Categories' }, ...['Inventory', 'Security', 'System', 'Restore', 'Admin'].map(value => ({ value, label: value }))]}
+            />
           </div>
 
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Level:</span>
-            <select
+            <SearchableSelect
+              aria-label="Log level"
               value={selectedLevel}
-              onChange={(e) => setSelectedLevel(e.target.value)}
+              onChange={setSelectedLevel}
               className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none"
-            >
-              <option value="All">All Levels</option>
-              <option value="info">Info</option>
-              <option value="success">Success</option>
-              <option value="warning">Warning</option>
-              <option value="security">Security</option>
-            </select>
+              options={[{ value: 'All', label: 'All Levels' }, { value: 'info', label: 'Info' }, { value: 'success', label: 'Success' }, { value: 'warning', label: 'Warning' }, { value: 'security', label: 'Security' }]}
+            />
           </div>
         </div>
       </div>
