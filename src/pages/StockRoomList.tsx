@@ -299,19 +299,18 @@ export function StockRoomList() {
               <Link
                 key={cls.title}
                 to={`/stock-room/${encodeURIComponent(cls.title)}`}
-                className="group relative p-[2px] rounded-2xl overflow-hidden shadow-sm transition-all hover:shadow-md block"
+                className="group p-5 rounded-2xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 shadow-sm hover:shadow-md flex items-center justify-between"
+                aria-label={`${cls.title}, done`}
               >
-                {/* Animated lighting border */}
-                <div className="absolute inset-[-100%] bg-[conic-gradient(from_0deg_at_50%_50%,transparent_0%,transparent_75%,#3b82f6_100%)] animate-[spin_3s_linear_infinite]" />
-                
-                <div className="relative p-5 rounded-2xl bg-blue-50/95 dark:bg-slate-900/95 backdrop-blur-xl flex items-center justify-between h-full w-full">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 rounded-xl transition-colors bg-blue-100 dark:bg-blue-900/40 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/60">
-                      <CheckCheck className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                    </div>
-                    <h3 className="font-bold text-blue-900 dark:text-blue-100">{cls.title}</h3>
+                <div className="flex items-center gap-4 min-w-0">
+                  <div className="p-3 rounded-xl bg-emerald-100 dark:bg-emerald-900/50">
+                    <CheckCheck className="w-6 h-6 text-emerald-700 dark:text-emerald-300" />
                   </div>
-                  <ChevronRight className="w-5 h-5 transition-colors text-blue-400 dark:text-blue-500 group-hover:text-blue-600 dark:group-hover:text-blue-300" />
+                  <h3 className="font-bold text-emerald-950 dark:text-emerald-100 truncate">{cls.title}</h3>
+                </div>
+                <div className="flex items-center gap-3 shrink-0 pl-2">
+                  <span className="text-xs font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-900/60 px-2.5 py-1 rounded-full">Done</span>
+                  <ChevronRight className="w-5 h-5 text-emerald-700 dark:text-emerald-300" />
                 </div>
               </Link>
             ) : (
