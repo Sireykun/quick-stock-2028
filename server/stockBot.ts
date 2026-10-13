@@ -40,7 +40,7 @@ export function answerStockQuestion(message: string, entries: StockEntry[], lowT
   if (/^\/summary$/i.test(query) || /^(stock )?(summary|overview|total)$/i.test(query)) {
     const total = entries.reduce((sum, entry) => sum + entry.quantity, 0);
     const empty = entries.filter(entry => entry.quantity <= 0).length;
-    return `${rooms.length} rooms · ${entries.length} item rows · ${total} units\n${empty} item rows are out of stock.\nUse /rooms, /room 106, /item keyboard, or /low.`;
+    return `${rooms.length} ${rooms.length === 1 ? 'room' : 'rooms'} · ${entries.length} ${entries.length === 1 ? 'item row' : 'item rows'} · ${total} units\nOut of stock: ${empty} ${empty === 1 ? 'item row' : 'item rows'}.\nUse /rooms, /room ${rooms[0]}, /item keyboard, or /low.`;
   }
   if (/^\/low$/i.test(query) || /\b(low|out of stock|missing|zero stock)\b/i.test(query)) {
     const low = entries.filter(entry => entry.quantity <= lowThreshold).sort((a, b) => a.quantity - b.quantity);

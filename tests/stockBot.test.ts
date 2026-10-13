@@ -21,4 +21,6 @@ test('reads the older flat stock sheet format', () => {
     ['HDMI Cable', '4', '', '', '', '', '', '', 'Stock Room Office'],
   ]);
   assert.deepEqual(entries, [{ room: 'Stock Room Office', item: 'HDMI Cable', quantity: 4, status: '' }]);
+  assert.match(answerStockQuestion('/summary', entries), /1 room · 1 item row · 4 units/);
+  assert.match(answerStockQuestion('/summary', entries), /\/room Stock Room Office/);
 });
