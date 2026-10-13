@@ -15,12 +15,11 @@ The bot answers stock questions from the same Google Sheet as Quick Stock. It is
    | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | JSON key's `client_email` |
    | `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | JSON key's `private_key`, including BEGIN/END lines |
    | `STOCK_SPREADSHEET_ID` | Spreadsheet ID from Quick Stock Settings |
-   | `TELEGRAM_ALLOWED_USER_IDS` | Manager's Telegram numeric user ID; comma separated for multiple managers |
 
    Optional plain variables: `STOCK_SHEET_NAME` (defaults to `Stock Room`) and `STOCK_LOW_THRESHOLD` (defaults to `5`). Do not add any of these values to Git or Vite's `VITE_` variables.
 
 4. Deploy the site again after adding secrets, so Cloudflare binds them to the Function.
 5. Register `https://quick-stock-2028.pages.dev/api/telegram` as the Telegram webhook with `scripts/set-telegram-webhook.mjs`. Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` as temporary environment variables in the terminal, then run `node scripts/set-telegram-webhook.mjs`. The script does not print either secret.
-6. Have the manager message the bot `/id`. Add that numeric ID to `TELEGRAM_ALLOWED_USER_IDS` in Cloudflare and deploy again. Then the manager can use `/summary` to confirm access.
+6. Have the manager message the bot `/id`. Add that numeric ID as the encrypted `TELEGRAM_ALLOWED_USER_IDS` secret in Cloudflare (comma separate multiple managers) and deploy again. Then the manager can use `/summary` to confirm access.
 
 The `/id` command reports only the sender's own ID. Other commands reject users who are not on the allowlist. The endpoint requires Telegram's webhook secret header; the bot ignores group chats. If it cannot read the Sheet, it sends a generic error and logs the technical reason in Cloudflare.
