@@ -3,6 +3,10 @@ build/
 dist/
 coverage/
 .wrangler-check/
+telegram.txt
+*service-account*.json
+*.key.json
+spartan-phoenix-511503-t1-5182afd3894a.json
 .DS_Store
 *.log
 .env*
