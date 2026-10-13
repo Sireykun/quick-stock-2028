@@ -6,6 +6,8 @@ type Env = {
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   TELEGRAM_ALLOWED_USER_IDS?: string;
+  TELEGRAM_ALLOWED_GROUP_IDS?: string;
+  TELEGRAM_BOT_USERNAME?: string;
   GOOGLE_SERVICE_ACCOUNT_EMAIL?: string;
   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?: string;
   STOCK_SPREADSHEET_ID?: string;
@@ -14,7 +16,20 @@ type Env = {
 };
 
 type Context = { request: Request; env: Env };
-type TelegramUpdate = { message?: { text?: string; chat?: { id?: number; type?: string }; from?: { id?: number } } };
+type TelegramUpdate = { message?: { text?: string; chat?: { id?: number; type?: string }; from?: { id?: number }; reply_to_message?: { from?: { username?: string } } } };
+
+function addressedGroupQuestion(message: NonNullable<TelegramUpdate['message']>, botUsername: string): string | null {
+  const text = message.text?.trim() || '';
+  const command = text.match(/^\/([a-z0-9_]+)(?:@([a-z0-9_]+))?(?=\s|$)/i);
+  if (command) {
+    if (command[2] && command[2].toLowerCase() !== botUsername.toLowerCase()) return null;
+    return `/${command[1]}${text.slice(command[0].length)}`.trim();
+  }
+  const mention = new RegExp(`(^|\\s)@${botUsername}(?=\\s|$|[?!,.])`, 'i');
+  const isReply = message.reply_to_message?.from?.username?.toLowerCase() === botUsername.toLowerCase();
+  if (!mention.test(text) && !isReply) return null;
+  return text.replace(mention, ' ').trim() || '/help';
+}
 
 const encode = (value: object) => btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(value))))
   .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
@@ -99,21 +114,37 @@ export async function onRequestPost({ request, env }: Context): Promise<Response
   const message = update.message;
   const chatId = message?.chat?.id;
   const userId = message?.from?.id;
-  if (!message?.text || !chatId || !userId || message.chat?.type !== 'private') return new Response('OK');
-  if (/^\/id(?:@\w+)?$/i.test(message.text.trim())) {
-    await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, `Your Telegram user ID: ${userId}`);
+  if (!message?.text || !chatId || !userId) return new Response('OK');
+  const isPrivate = message.chat?.type === 'private';
+  const isGroup = message.chat?.type === 'group' || message.chat?.type === 'supergroup';
+  if (!isPrivate && !isGroup) return new Response('OK');
+  const botUsername = (config.TELEGRAM_BOT_USERNAME || 'SS2_stock_bot').replace(/^@/, '').trim();
+  if (!/^[a-z0-9_]+$/i.test(botUsername)) return new Response('Bot username is invalid', { status: 503 });
+  const question = isGroup ? addressedGroupQuestion(message, botUsername) : message.text.trim();
+  if (!question) return new Response('OK');
+  if (/^\/id$/i.test(question)) {
+    await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, isGroup
+      ? `Your Telegram user ID: ${userId}\nThis group ID: ${chatId}`
+      : `Your Telegram user ID: ${userId}`);
     return new Response('OK');
   }
   const allowed = (config.TELEGRAM_ALLOWED_USER_IDS || '').split(',').map(value => value.trim()).filter(Boolean);
   if (!allowed.includes(String(userId))) {
-    await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, 'Access is restricted. Send /id to see your user ID, then ask the Quick Stock owner to add it.');
+    if (isPrivate) await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, 'Access is restricted. Send /id to see your user ID, then ask the Quick Stock owner to add it.');
     return new Response('OK');
+  }
+  if (isGroup) {
+    const allowedGroups = (config.TELEGRAM_ALLOWED_GROUP_IDS || '').split(',').map(value => value.trim()).filter(Boolean);
+    if (!allowedGroups.includes(String(chatId))) {
+      await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, `This group is not enabled. Ask the Quick Stock owner to add group ID ${chatId}.`);
+      return new Response('OK');
+    }
   }
   try {
     const { tabs, entries } = await sheetData(config);
-    const answer = answerSheetQuestion(message.text, tabs) ||
-      answerStockQuestion(message.text, entries, Number(config.STOCK_LOW_THRESHOLD) || 5);
-    await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, answer, stockQuestionKeyboard(entries, stockMenuView(message.text)));
+    const answer = answerSheetQuestion(question, tabs) ||
+      answerStockQuestion(question, entries, Number(config.STOCK_LOW_THRESHOLD) || 5);
+    await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, answer, isPrivate ? stockQuestionKeyboard(entries, stockMenuView(question)) : undefined);
     return new Response('OK');
   } catch (error) {
     console.error('Stock bot failed:', error);

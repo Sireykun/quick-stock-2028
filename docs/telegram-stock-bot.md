@@ -1,6 +1,6 @@
 # Telegram Sheet bot
 
-The bot reads the complete Quick Stock spreadsheet for allowed Telegram user IDs in private chats. It can list every tab with `/tabs`, browse data rows with `/tab Item Master` or `/tab Lab_Template 2`, search cell values across tabs with `/find HDMI`, list Type/Model values with `/types`, and search by type with `/type Acer Core5`. Type searches include inventory, templates, and dropdown values. It can also answer inventory and field questions such as “What is the hostname of the keyboard in room 109?”. Dashboard tabs without cells are listed but have no rows to browse. Each question reads the current Sheet; the bot is read-only.
+The bot reads the complete Quick Stock spreadsheet for allowed Telegram user IDs in private chats and explicitly allowed groups. It can list every tab with `/tabs`, browse data rows with `/tab Item Master` or `/tab Lab_Template 2`, search cell values across tabs with `/find HDMI`, list Type/Model values with `/types`, and search by type with `/type Acer Core5`. Type searches include inventory, templates, and dropdown values. It can also answer inventory and field questions such as “What is the hostname of the keyboard in room 109?”. Dashboard tabs without cells are listed but have no rows to browse. Each question reads the current Sheet; the bot is read-only.
 
 The Telegram command menu contains `/start`, `/menu`, `/tabs`, `/tab`, `/find`, `/types`, `/models`, `/type`, `/summary`, `/rooms`, `/low`, `/help`, and `/id`. An allowed user can send `/menu` to show a short main keyboard. **Items** opens Item names, Types, Models, and Search item; **Rooms** opens room shortcuts and Find room. **Back** returns to the main keyboard. Users can also type longer questions such as “How many keyboards do we have in room 109?” or “Find type Acer Core5”. The bot matches tab names and Sheet values; it does not generate open-ended AI answers. To refresh the command menu after bot setup, run `node scripts/set-telegram-commands.mjs` with `TELEGRAM_BOT_TOKEN` set in the terminal.
 
@@ -26,4 +26,13 @@ The Telegram command menu contains `/start`, `/menu`, `/tabs`, `/tab`, `/find`, 
 
 If Quick Stock is switched to another spreadsheet, share the new spreadsheet with the service account as **Viewer**, update Cloudflare's encrypted `STOCK_SPREADSHEET_ID` to the new spreadsheet ID, and redeploy Pages. Changing the spreadsheet in app Settings alone does not update the bot's Cloudflare secret. Run `node scripts/verify-google-service-account.mjs <key.json> <new-spreadsheet-id>` to confirm that the bot can read every data tab before deploying.
 
-The `/id` command reports only the sender's own ID. Other commands reject users who are not on the allowlist. The endpoint requires Telegram's webhook secret header; the bot ignores group chats. If it cannot read the Sheet, it sends a generic error and logs the technical reason in Cloudflare.
+## Use in a Telegram group
+
+1. Add **@SS2_stock_bot** to the group. It needs permission to send messages, but it does not need administrator rights. Keep BotFather privacy mode enabled.
+2. An already allowed user sends `/id@SS2_stock_bot` in the group. The reply shows the negative group ID (often beginning with `-100`).
+3. Add that ID to the encrypted Cloudflare Pages production secret `TELEGRAM_ALLOWED_GROUP_IDS`. Separate multiple group IDs with commas. Redeploy Pages so the Function receives the new secret. `TELEGRAM_ALLOWED_USER_IDS` continues to control which members may ask questions.
+4. Test `/summary@SS2_stock_bot`, `/room@SS2_stock_bot 109`, or `/type@SS2_stock_bot Acer Core5` in the group. To ask a longer question, reply to one of the bot's messages. Replies are visible to everyone in the group; private chats still show the tap keyboard.
+
+If the bot's username changes, set `TELEGRAM_BOT_USERNAME` to the new username (without `@`) in Cloudflare and redeploy. With privacy mode enabled, Telegram delivers commands addressed to the bot and replies to it; the bot does not need to read every group message. [Telegram's bot FAQ](https://core.telegram.org/bots/faq) explains privacy mode.
+
+The `/id` command reports the sender's own ID and, in a group, the group ID. Other commands require both an allowed user and an allowed group. The endpoint requires Telegram's webhook secret header. If it cannot read the Sheet, it sends a generic error and logs the technical reason in Cloudflare.
