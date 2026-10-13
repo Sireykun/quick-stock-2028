@@ -1,4 +1,4 @@
-export type StockEntry = { room: string; item: string; quantity: number; status: string };
+export type StockEntry = { room: string; item: string; quantity: number; status: string; type?: string; hostname?: string; snid?: string };
 
 const clean = (value: string) => value.replace(/\s+/g, ' ').trim();
 const key = (value: string) => clean(value).toLocaleLowerCase();
@@ -38,7 +38,7 @@ export function stockQuestionKeyboard(entries: StockEntry[], view: StockMenuView
   return [
     ['📦 Items', '🏠 Rooms'],
     ['📊 Overview', '⚠️ Low stock'],
-    ['📄 Sheet tabs', '❓ Help'],
+    ['📄 PDF', '📄 Sheet tabs'],
   ];
 }
 
@@ -55,17 +55,17 @@ export function parseStockRows(rows: string[][]): StockEntry[] {
     if (formatB) {
       const item = clean(row[0] || '');
       const room = clean(row[8] || '');
-      if (item && room) entries.push({ room, item, quantity: Number(row[1]) || 0, status: clean(row[5] || '') });
+      if (item && room) entries.push({ room, item, quantity: Number(row[1]) || 0, status: clean(row[5] || ''), type: clean(row[3] || ''), hostname: clean(row[6] || ''), snid: clean(row[7] || '') });
     } else {
       if (clean(row[0] || '')) currentRoom = clean(row[0]);
       const item = clean(row[1] || '');
-      if (item && currentRoom) entries.push({ room: currentRoom, item, quantity: Number(row[2]) || 0, status: clean(row[8] || '') });
+      if (item && currentRoom) entries.push({ room: currentRoom, item, quantity: Number(row[2]) || 0, status: clean(row[8] || ''), type: clean(row[4] || ''), hostname: clean(row[5] || ''), snid: clean(row[6] || '') });
     }
   }
   return entries;
 }
 
-const help = '👋 Quick Stock\n\nTry a question or command:\n/summary  Stock totals\n/rooms  Browse rooms\n/room 109  Items in a room\n/item keyboard  Find an item\n/type Acer Core5  Find a model\n/find HDMI  Search the Sheet\n\nMore: /tabs · /low · /types';
+const help = '👋 Quick Stock\n\nTry a question or command:\n/summary  Stock totals\n/rooms  Browse rooms\n/room 109  Items in a room\n/item keyboard  Find an item\n/type Acer Core5  Find a model\n/find HDMI  Search the Sheet\n/pdf  Monthly stock PDF\n\nMore: /tabs · /low · /types';
 
 export function answerStockQuestion(message: string, entries: StockEntry[], lowThreshold = 5): string {
   const pressed = clean(message.replace(/@[A-Za-z0-9_]+/g, ''));

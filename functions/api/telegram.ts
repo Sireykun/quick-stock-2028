@@ -1,6 +1,7 @@
 import { answerStockQuestion, parseStockRows, stockMenuView, stockQuestionKeyboard, type StockEntry } from '../../server/stockBot';
 import { answerSheetQuestion, type SheetTab } from '../../server/sheetBot';
 import { formatBotReply } from '../../server/botReply';
+import { createMonthlyStockPdf } from '../../server/stockPdf';
 
 type Env = {
   TELEGRAM_BOT_TOKEN?: string;
@@ -60,7 +61,7 @@ async function googleGet(url: string, token: string): Promise<any> {
   return response.json();
 }
 
-async function sheetData(env: Env): Promise<{ tabs: SheetTab[]; entries: StockEntry[] }> {
+async function sheetData(env: Env, stockOnly = false): Promise<{ tabs: SheetTab[]; entries: StockEntry[]; stockEntries: StockEntry[] }> {
   const token = await googleAccessToken(env.GOOGLE_SERVICE_ACCOUNT_EMAIL!, env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY!);
   const id = env.STOCK_SPREADSHEET_ID!;
   const metadata = await googleGet(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}?fields=sheets(properties(title,gridProperties))`, token);
@@ -70,16 +71,34 @@ async function sheetData(env: Env): Promise<{ tabs: SheetTab[]; entries: StockEn
   const wanted = (env.STOCK_SHEET_NAME || 'Stock Room').toLowerCase();
   const stockName = sheets.find(sheet => sheet.name.toLowerCase() === wanted)?.name || sheets.find(sheet => /stock\s*room/i.test(sheet.name))?.name;
   if (!stockName) throw new Error('Stock Room tab was not found');
-  const readable = sheets.filter(sheet => sheet.readable);
+  const readable = sheets.filter(sheet => sheet.readable && (!stockOnly || sheet.name === stockName));
   const params = new URLSearchParams();
   for (const sheet of readable) params.append('ranges', `'${sheet.name.replace(/'/g, "''")}'!A1:AZ`);
   const result = await googleGet(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}/values:batchGet?${params}`, token);
   const valueRanges: { values?: string[][] }[] = result.valueRanges || [];
   const rowsByName = new Map(readable.map((sheet, index) => [sheet.name, valueRanges[index]?.values || []]));
   const tabs: SheetTab[] = sheets.map(sheet => ({ ...sheet, rows: rowsByName.get(sheet.name) || [] }));
+  const stockEntries = parseStockRows(tabs.find(tab => tab.name === stockName)?.rows || []);
   const entries = tabs.filter(tab => tab.name === stockName || /^(class|classes)$/i.test(tab.name))
     .flatMap(tab => parseStockRows(tab.rows));
-  return { tabs, entries };
+  return { tabs, entries, stockEntries };
+}
+
+function currentMonth(): string {
+  const localDate = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  return `${localDate.getUTCFullYear()}-${String(localDate.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+async function sendPdf(token: string, chatId: number, month: string, entries: StockEntry[]): Promise<void> {
+  const bytes = createMonthlyStockPdf(month, entries);
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  const form = new FormData();
+  form.append('chat_id', String(chatId));
+  form.append('document', new Blob([buffer], { type: 'application/pdf' }), `quick-stock-${month}.pdf`);
+  form.append('caption', `Stock inventory · ${month}\nLive Sheet snapshot. Fill in the physical counts.`);
+  const response = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, { method: 'POST', body: form });
+  if (!response.ok || !(await response.json() as { ok?: boolean }).ok) throw new Error(`Telegram PDF send failed (${response.status})`);
 }
 
 async function sendMessage(token: string, chatId: number, text: string, keyboard?: string[][]): Promise<void> {
@@ -141,15 +160,32 @@ export async function onRequestPost({ request, env }: Context): Promise<Response
       return new Response('OK');
     }
   }
+  const pdfCommand = question.match(/^\/pdf(?:\s+(.+))?$/i);
+  const isPdfRequest = Boolean(pdfCommand || question === '📄 PDF');
+  const pdfMonth = pdfCommand?.[1]?.trim() || currentMonth();
+  if (isPdfRequest && !/^\d{4}-(0[1-9]|1[0-2])$/.test(pdfMonth)) {
+    await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, 'Use /pdf for this month, or /pdf 2026-10 for another report month.');
+    return new Response('OK');
+  }
   try {
-    const { tabs, entries } = await sheetData(config);
+    const { tabs, entries, stockEntries } = await sheetData(config, isPdfRequest);
+    if (isPdfRequest) {
+      if (!stockEntries.length) {
+        await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, 'The Stock Room sheet has no items to put in a PDF.');
+      } else {
+        await sendPdf(config.TELEGRAM_BOT_TOKEN, chatId, pdfMonth, stockEntries);
+      }
+      return new Response('OK');
+    }
     const answer = answerSheetQuestion(question, tabs) ||
       answerStockQuestion(question, entries, Number(config.STOCK_LOW_THRESHOLD) || 5);
     await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, answer, isPrivate ? stockQuestionKeyboard(entries, stockMenuView(question)) : undefined);
     return new Response('OK');
   } catch (error) {
     console.error('Stock bot failed:', error);
-    await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, 'I could not read the Sheet right now. Please try again later.');
+    await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, isPdfRequest
+      ? 'I could not create the stock PDF right now. Please try again later.'
+      : 'I could not read the Sheet right now. Please try again later.');
     return new Response('OK');
   }
 }

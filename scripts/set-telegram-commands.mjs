@@ -16,6 +16,7 @@ const commands = [
   { command: 'summary', description: 'See total rooms and inventory' },
   { command: 'rooms', description: 'List inventory rooms' },
   { command: 'low', description: 'Find low or empty stock' },
+  { command: 'pdf', description: 'Download monthly Stock Room PDF' },
   { command: 'help', description: 'See Sheet question examples' },
   { command: 'id', description: 'Show your Telegram user ID' },
 ];
