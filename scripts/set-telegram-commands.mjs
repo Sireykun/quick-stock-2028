@@ -5,12 +5,15 @@ if (!token) {
 }
 
 const commands = [
-  { command: 'start', description: 'Open stock question buttons' },
+  { command: 'start', description: 'Open Sheet question buttons' },
   { command: 'menu', description: 'Show ready-to-tap questions' },
-  { command: 'summary', description: 'See total rooms and stock' },
-  { command: 'rooms', description: 'List stock rooms' },
+  { command: 'tabs', description: 'List every Sheet tab' },
+  { command: 'tab', description: 'Browse a tab, for example Item Master' },
+  { command: 'find', description: 'Search all tabs for a value' },
+  { command: 'summary', description: 'See total rooms and inventory' },
+  { command: 'rooms', description: 'List inventory rooms' },
   { command: 'low', description: 'Find low or empty stock' },
-  { command: 'help', description: 'See what you can ask' },
+  { command: 'help', description: 'See Sheet question examples' },
   { command: 'id', description: 'Show your Telegram user ID' },
 ];
 

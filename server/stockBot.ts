@@ -21,6 +21,7 @@ export function stockQuestionKeyboard(entries: StockEntry[]): string[][] {
   return [
     ['📊 Stock overview', '🏠 Show rooms'],
     ['⚠️ Low stock', '🔎 Find an item'],
+    ['📄 All sheet tabs', '🧾 Item names'],
     ['How many items do we have in total?'],
     ['Which items are low or out of stock?'],
     ...(entries.some(entry => key(entry.room) === '109') ? [['What is in room 109?']] : []),
@@ -52,7 +53,7 @@ export function parseStockRows(rows: string[][]): StockEntry[] {
   return entries;
 }
 
-const help = 'Tap a question below, or type a full question, for example:\n• What items are in room 109?\n• How many keyboards are in room 109?\n• Which rooms have a keyboard?\n• Which items are low or out of stock?\n• How many items do we have in total?\nCommands: /summary, /rooms, /room 109, /item keyboard, /low';
+const help = 'Tap a question below, or type a full question, for example:\n• What items are in room 109?\n• Which rooms have a keyboard?\n• What is in Item Master?\n• Show the Lab_Template.\n• What dropdown values are available?\n• Search the Sheet for HDMI.\nCommands: /summary, /rooms, /room 109, /item keyboard, /low, /tabs, /tab Item Master, /find HDMI';
 
 export function answerStockQuestion(message: string, entries: StockEntry[], lowThreshold = 5): string {
   const pressed = clean(message.replace(/@[A-Za-z0-9_]+/g, ''));

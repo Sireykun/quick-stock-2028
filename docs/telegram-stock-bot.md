@@ -1,8 +1,8 @@
-# Telegram stock bot
+# Telegram Sheet bot
 
-The bot answers inventory questions from the `stock room` and `CLASS` tabs of the same Google Sheet as Quick Stock. It is read-only and works in private chats for allowed Telegram user IDs. Supported questions include `/summary`, `/rooms`, `/room 109`, `/item keyboard`, `/low`, “What is in room 109?” and “How many keyboards?”. Each question reads the current sheet.
+The bot reads the complete Quick Stock spreadsheet for allowed Telegram user IDs in private chats. It can list every tab with `/tabs`, browse data rows with `/tab Item Master` or `/tab Lab_Template 2`, search cell values across tabs with `/find HDMI`, and answer inventory questions from `stock room` and `CLASS`. It can also answer field questions such as “What is the hostname of the keyboard in room 109?”. Dashboard tabs without cells are listed but have no rows to browse. Each question reads the current Sheet; the bot is read-only.
 
-The Telegram command menu contains `/start`, `/menu`, `/summary`, `/rooms`, `/low`, `/help`, and `/id`. An allowed user can send `/menu` to show persistent question buttons, including full-sentence questions about totals, low stock, and room 109 when it exists. Users can also type longer questions such as “How many keyboards do we have in room 109?” or “Which rooms have keyboards?”. The bot matches room and item names from the Sheet; it does not generate open-ended AI answers. To refresh the command menu after bot setup, run `node scripts/set-telegram-commands.mjs` with `TELEGRAM_BOT_TOKEN` set in the terminal.
+The Telegram command menu contains `/start`, `/menu`, `/tabs`, `/tab`, `/find`, `/summary`, `/rooms`, `/low`, `/help`, and `/id`. An allowed user can send `/menu` to show persistent question buttons. Users can also type longer questions such as “How many keyboards do we have in room 109?” or “What dropdown values are available?”. The bot matches tab names and Sheet values; it does not generate open-ended AI answers. To refresh the command menu after bot setup, run `node scripts/set-telegram-commands.mjs` with `TELEGRAM_BOT_TOKEN` set in the terminal.
 
 ## One-time setup
 
