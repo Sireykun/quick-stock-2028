@@ -2,6 +2,8 @@
 
 The bot answers stock questions from the same Google Sheet as Quick Stock. It is read-only and works in private chats for allowed Telegram user IDs. Supported questions include `/summary`, `/rooms`, `/room 106`, `/item keyboard`, `/low`, “What is in room 106?” and “How many keyboards?”. Each question reads the current sheet.
 
+The Telegram command menu contains `/start`, `/menu`, `/summary`, `/rooms`, `/low`, `/help`, and `/id`. An allowed user can send `/menu` to show persistent question buttons, including buttons for up to four rooms. To refresh the command menu after bot setup, run `node scripts/set-telegram-commands.mjs` with `TELEGRAM_BOT_TOKEN` set in the terminal.
+
 ## One-time setup
 
 1. In Telegram, create a bot with [@BotFather](https://t.me/BotFather). Keep its token private.

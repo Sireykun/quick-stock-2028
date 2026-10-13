@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { answerStockQuestion, parseStockRows } from '../server/stockBot';
+import { answerStockQuestion, parseStockRows, stockQuestionKeyboard } from '../server/stockBot';
 
 test('answers room and item questions from the stock sheet format', () => {
   const entries = parseStockRows([
@@ -13,6 +13,10 @@ test('answers room and item questions from the stock sheet format', () => {
   assert.match(answerStockQuestion('/room 106', entries), /Keyboard: 3/);
   assert.match(answerStockQuestion('How many keyboards?', entries), /5 units/);
   assert.match(answerStockQuestion('/low', entries, 0), /Mouse — 0 in 106/);
+  assert.match(answerStockQuestion('📊 Stock overview', entries), /2 rooms/);
+  assert.match(answerStockQuestion('⚠️ Low stock', entries, 0), /Mouse — 0 in 106/);
+  assert.match(answerStockQuestion('📍 106', entries), /Keyboard: 3/);
+  assert.equal(stockQuestionKeyboard(entries)[2][0], '📍 106');
 });
 
 test('reads the older flat stock sheet format', () => {

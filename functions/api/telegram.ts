@@ -1,4 +1,4 @@
-import { answerStockQuestion, parseStockRows } from '../../server/stockBot';
+import { answerStockQuestion, parseStockRows, stockQuestionKeyboard } from '../../server/stockBot';
 
 type Env = {
   TELEGRAM_BOT_TOKEN?: string;
@@ -56,10 +56,14 @@ async function stockRows(env: Env): Promise<string[][]> {
   return result.values || [];
 }
 
-async function sendMessage(token: string, chatId: number, text: string): Promise<void> {
+async function sendMessage(token: string, chatId: number, text: string, keyboard?: string[][]): Promise<void> {
   const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text: text.slice(0, 4096) }),
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: text.slice(0, 4096),
+      ...(keyboard ? { reply_markup: { keyboard, resize_keyboard: true, is_persistent: true, input_field_placeholder: 'Ask about stock' } } : {}),
+    }),
   });
   if (!response.ok) throw new Error(`Telegram send failed (${response.status})`);
 }
@@ -96,8 +100,9 @@ export async function onRequestPost({ request, env }: Context): Promise<Response
   }
   try {
     const rows = await stockRows(config);
-    const answer = answerStockQuestion(message.text, parseStockRows(rows), Number(config.STOCK_LOW_THRESHOLD) || 5);
-    await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, answer);
+    const entries = parseStockRows(rows);
+    const answer = answerStockQuestion(message.text, entries, Number(config.STOCK_LOW_THRESHOLD) || 5);
+    await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, answer, stockQuestionKeyboard(entries));
     return new Response('OK');
   } catch (error) {
     console.error('Stock bot failed:', error);
