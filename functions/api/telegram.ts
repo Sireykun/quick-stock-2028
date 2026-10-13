@@ -77,10 +77,6 @@ export async function onRequestPost({ request, env }: Context): Promise<Response
     return new Response('Bot is not configured', { status: 503 });
   }
   if (request.headers.get('X-Telegram-Bot-Api-Secret-Token') !== config.TELEGRAM_WEBHOOK_SECRET) {
-    console.warn('Telegram webhook secret mismatch', {
-      receivedLength: request.headers.get('X-Telegram-Bot-Api-Secret-Token')?.length ?? 0,
-      configuredLength: config.TELEGRAM_WEBHOOK_SECRET.length,
-    });
     return new Response('Forbidden', { status: 403 });
   }
   let update: TelegramUpdate;
