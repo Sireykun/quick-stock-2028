@@ -1,0 +1,104 @@
+import { answerStockQuestion, parseStockRows } from '../../server/stockBot';
+
+type Env = {
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_WEBHOOK_SECRET?: string;
+  TELEGRAM_ALLOWED_USER_IDS?: string;
+  GOOGLE_SERVICE_ACCOUNT_EMAIL?: string;
+  GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?: string;
+  STOCK_SPREADSHEET_ID?: string;
+  STOCK_SHEET_NAME?: string;
+  STOCK_LOW_THRESHOLD?: string;
+};
+
+type Context = { request: Request; env: Env };
+type TelegramUpdate = { message?: { text?: string; chat?: { id?: number; type?: string }; from?: { id?: number } } };
+
+const encode = (value: object) => btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(value))))
+  .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+
+async function googleAccessToken(email: string, privateKey: string): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  const header = encode({ alg: 'RS256', typ: 'JWT' });
+  const payload = encode({ iss: email, scope: 'https://www.googleapis.com/auth/spreadsheets.readonly', aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600 });
+  const pem = privateKey.replace(/\\n/g, '\n').replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, '');
+  const binary = atob(pem);
+  const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+  const key = await crypto.subtle.importKey('pkcs8', bytes, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  const signature = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(`${header}.${payload}`)));
+  const jwt = `${header}.${payload}.${btoa(String.fromCharCode(...signature)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')}`;
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: jwt }),
+  });
+  if (!response.ok) throw new Error(`Google authentication failed (${response.status})`);
+  const data = await response.json() as { access_token?: string };
+  if (!data.access_token) throw new Error('Google did not provide an access token');
+  return data.access_token;
+}
+
+async function googleGet(url: string, token: string): Promise<any> {
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!response.ok) throw new Error(`Google Sheets read failed (${response.status})`);
+  return response.json();
+}
+
+async function stockRows(env: Env): Promise<string[][]> {
+  const token = await googleAccessToken(env.GOOGLE_SERVICE_ACCOUNT_EMAIL!, env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY!);
+  const id = env.STOCK_SPREADSHEET_ID!;
+  const metadata = await googleGet(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}?fields=sheets(properties(title))`, token);
+  const sheets: string[] = (metadata.sheets || []).map((sheet: any) => sheet.properties?.title).filter(Boolean);
+  const wanted = (env.STOCK_SHEET_NAME || 'Stock Room').toLowerCase();
+  const name = sheets.find(sheet => sheet.toLowerCase() === wanted) || sheets.find(sheet => /stock\s*room/i.test(sheet));
+  if (!name) throw new Error('Stock Room tab was not found');
+  const range = encodeURIComponent(`'${name.replace(/'/g, "''")}'!A1:I`);
+  const result = await googleGet(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}/values/${range}`, token);
+  return result.values || [];
+}
+
+async function sendMessage(token: string, chatId: number, text: string): Promise<void> {
+  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text: text.slice(0, 4096) }),
+  });
+  if (!response.ok) throw new Error(`Telegram send failed (${response.status})`);
+}
+
+export async function onRequestPost({ request, env }: Context): Promise<Response> {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_WEBHOOK_SECRET || !env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
+      !env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || !env.STOCK_SPREADSHEET_ID) {
+    return new Response('Bot is not configured', { status: 503 });
+  }
+  if (request.headers.get('X-Telegram-Bot-Api-Secret-Token') !== env.TELEGRAM_WEBHOOK_SECRET) {
+    return new Response('Forbidden', { status: 403 });
+  }
+  let update: TelegramUpdate;
+  try { update = await request.json() as TelegramUpdate; } catch { return new Response('Invalid JSON', { status: 400 }); }
+  const message = update.message;
+  const chatId = message?.chat?.id;
+  const userId = message?.from?.id;
+  if (!message?.text || !chatId || !userId || message.chat?.type !== 'private') return new Response('OK');
+  if (/^\/id(?:@\w+)?$/i.test(message.text.trim())) {
+    await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, `Your Telegram user ID: ${userId}`);
+    return new Response('OK');
+  }
+  const allowed = (env.TELEGRAM_ALLOWED_USER_IDS || '').split(',').map(value => value.trim()).filter(Boolean);
+  if (!allowed.includes(String(userId))) {
+    await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, 'Access is restricted. Send /id to see your user ID, then ask the Quick Stock owner to add it.');
+    return new Response('OK');
+  }
+  try {
+    const rows = await stockRows(env);
+    const answer = answerStockQuestion(message.text, parseStockRows(rows), Number(env.STOCK_LOW_THRESHOLD) || 5);
+    await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, answer);
+    return new Response('OK');
+  } catch (error) {
+    console.error('Stock bot failed:', error);
+    await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, 'I could not read stock right now. Please try again later.');
+    return new Response('OK');
+  }
+}
+
+export function onRequestGet(): Response {
+  return new Response('Telegram stock bot endpoint', { status: 200 });
+}
