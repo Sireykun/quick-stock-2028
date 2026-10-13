@@ -2,7 +2,7 @@
 
 The bot answers inventory questions from the `stock room` and `CLASS` tabs of the same Google Sheet as Quick Stock. It is read-only and works in private chats for allowed Telegram user IDs. Supported questions include `/summary`, `/rooms`, `/room 109`, `/item keyboard`, `/low`, “What is in room 109?” and “How many keyboards?”. Each question reads the current sheet.
 
-The Telegram command menu contains `/start`, `/menu`, `/summary`, `/rooms`, `/low`, `/help`, and `/id`. An allowed user can send `/menu` to show persistent question buttons, including “What is in room 109?” when that room exists and buttons for up to four rooms. To refresh the command menu after bot setup, run `node scripts/set-telegram-commands.mjs` with `TELEGRAM_BOT_TOKEN` set in the terminal.
+The Telegram command menu contains `/start`, `/menu`, `/summary`, `/rooms`, `/low`, `/help`, and `/id`. An allowed user can send `/menu` to show persistent question buttons, including full-sentence questions about totals, low stock, and room 109 when it exists. Users can also type longer questions such as “How many keyboards do we have in room 109?” or “Which rooms have keyboards?”. The bot matches room and item names from the Sheet; it does not generate open-ended AI answers. To refresh the command menu after bot setup, run `node scripts/set-telegram-commands.mjs` with `TELEGRAM_BOT_TOKEN` set in the terminal.
 
 ## One-time setup
 
