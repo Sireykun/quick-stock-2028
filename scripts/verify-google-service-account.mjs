@@ -31,11 +31,20 @@ const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
 });
 if (!tokenResponse.ok) throw new Error(`Google token request failed (${tokenResponse.status})`);
 const token = await tokenResponse.json();
-const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets(properties(title))`, {
+const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets(properties(title,gridProperties))`, {
   headers: { Authorization: `Bearer ${token.access_token}` },
 });
 if (!response.ok) throw new Error(`Spreadsheet read failed (${response.status}). Check Viewer sharing and Sheets API.`);
 const metadata = await response.json();
 const stockSheet = (metadata.sheets || []).find(sheet => /stock\s*room/i.test(sheet.properties?.title || ''));
 if (!stockSheet) throw new Error('The spreadsheet is accessible but has no Stock Room tab.');
-console.log(`Verified: ${key.client_email} can read the Stock Room tab.`);
+const readable = (metadata.sheets || []).filter(sheet => sheet.properties?.gridProperties);
+const params = new URLSearchParams();
+for (const sheet of readable) params.append('ranges', `'${sheet.properties.title.replace(/'/g, "''")}'!A1:AZ`);
+const valuesResponse = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values:batchGet?${params}`, {
+  headers: { Authorization: `Bearer ${token.access_token}` },
+});
+if (!valuesResponse.ok) throw new Error(`Spreadsheet rows could not be read (${valuesResponse.status}). Check Viewer sharing and Sheets API.`);
+const values = await valuesResponse.json();
+if ((values.valueRanges || []).length !== readable.length) throw new Error('Some spreadsheet tabs could not be read.');
+console.log(`Verified: ${key.client_email} can read ${readable.length} data tabs, including Stock Room.`);
