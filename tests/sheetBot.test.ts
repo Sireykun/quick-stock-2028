@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { answerSheetQuestion, type SheetTab } from '../server/sheetBot';
+import { fitBotReply } from '../server/botReply';
 
 const tabs: SheetTab[] = [
   { name: 'CLASS', readable: true, rows: [
@@ -20,28 +21,35 @@ const tabs: SheetTab[] = [
 ];
 
 test('lists and browses all readable sheet tabs', () => {
-  assert.match(answerSheetQuestion('/tabs', tabs)!, /Item Master — 3 data rows/);
+  assert.match(answerSheetQuestion('/tabs', tabs)!, /Item Master — 3 rows/);
   assert.match(answerSheetQuestion('/tabs', tabs)!, /Dashboard — dashboard/);
   assert.match(answerSheetQuestion('📄 All sheet tabs', tabs)!, /Lab_Template/);
-  assert.match(answerSheetQuestion('What is in Item Master?', tabs)!, /Item Name: Keyboards/);
-  assert.match(answerSheetQuestion('🧾 Item names', tabs)!, /Item Name: HDMI/);
-  assert.match(answerSheetQuestion('Show the Lab_Template', tabs)!, /Default Type: Acer Core5/);
+  assert.match(answerSheetQuestion('What is in Item Master?', tabs)!, /3\. Keyboards/);
+  assert.match(answerSheetQuestion('🧾 Item names', tabs)!, /4\. HDMI/);
+  assert.match(answerSheetQuestion('Show the Lab_Template', tabs)!, /Type: Acer Core5/);
   assert.match(answerSheetQuestion('What dropdown values are available?', tabs)!, /Acer Core5/);
   assert.match(answerSheetQuestion('/types', tabs)!, /Acer Core5/);
   assert.match(answerSheetQuestion('🔽 Browse types', tabs)!, /acer/);
-  assert.match(answerSheetQuestion('/type Acer Core5', tabs)!, /Lab_Template.*AIO.*Acer Core5/);
-  assert.match(answerSheetQuestion('Find type Acer Core5', tabs)!, /Dropdowns.*Computer.*Acer Core5/);
-  assert.match(answerSheetQuestion('/type acer in room 109', tabs)!, /CLASS · 109 · Keyboards.*acer/);
+  assert.match(answerSheetQuestion('/type Acer Core5', tabs)!, /Lab_Template\n• AIO · Computer — Acer Core5/);
+  assert.match(answerSheetQuestion('Find type Acer Core5', tabs)!, /Dropdowns\n• Computer — Acer Core5/);
+  assert.match(answerSheetQuestion('/type acer in room 109', tabs)!, /CLASS\n• 109 · Keyboards.*acer/);
   assert.match(answerSheetQuestion('/tab Dashboard', tabs)!, /no readable cells/);
 });
 
 test('finds records across tabs and answers inventory fields', () => {
-  assert.match(answerSheetQuestion('/find HDMI', tabs)!, /stock room, row 2/);
-  assert.match(answerSheetQuestion('/find HDMI', tabs)!, /Item Master, row 4/);
-  assert.match(answerSheetQuestion('Search the Sheet for HDMI', tabs)!, /Item Master, row 4/);
-  assert.match(answerSheetQuestion('Find HDMI across all tabs', tabs)!, /stock room, row 2/);
+  assert.match(answerSheetQuestion('/find HDMI', tabs)!, /stock room\n• Row 2/);
+  assert.match(answerSheetQuestion('/find HDMI', tabs)!, /Item Master\n• Row 4/);
+  assert.match(answerSheetQuestion('Search the Sheet for HDMI', tabs)!, /Item Master\n• Row 4/);
+  assert.match(answerSheetQuestion('Find HDMI across all tabs', tabs)!, /stock room\n• Row 2/);
   assert.match(answerSheetQuestion('What is the hostname of the keyboard in room 109?', tabs)!, /HOST-109/);
   assert.match(answerSheetQuestion('What is the serial number of the keyboard in room 109?', tabs)!, /SERIAL-109/);
   assert.match(answerSheetQuestion('Show me class template defaults', tabs)!, /Keyboards/);
   assert.equal(answerSheetQuestion('How many keyboards are in room 109?', tabs), null);
+});
+
+test('long Telegram replies end at a full line with a clear continuation note', () => {
+  const answer = fitBotReply(Array.from({ length: 100 }, (_, index) => `• Row ${index}: inventory data`).join('\n'), 140);
+  assert.ok(answer.length <= 140);
+  assert.match(answer, /\n\n…More results\. Try a narrower question\.$/);
+  assert.doesNotMatch(answer, /inventory da\n/);
 });

@@ -54,7 +54,7 @@ export function parseStockRows(rows: string[][]): StockEntry[] {
   return entries;
 }
 
-const help = 'Tap a question below, or type a full question, for example:\n• What items are in room 109?\n• Which rooms have a keyboard?\n• What types are available?\n• Find type Acer Core5.\n• What is in Item Master?\n• Search the Sheet for HDMI.\nCommands: /summary, /rooms, /room 109, /item keyboard, /low, /tabs, /tab Item Master, /types, /type Acer Core5, /find HDMI';
+const help = '👋 Quick Stock bot\n\nAsk about a room, an item, a Type/Model, or any Sheet tab.\n\nTry asking:\n• What is in room 109?\n• Where are the keyboards?\n• What types are available?\n• Find type Acer Core5\n• Search the Sheet for HDMI\n\nBrowse: /rooms · /tabs · /types';
 
 export function answerStockQuestion(message: string, entries: StockEntry[], lowThreshold = 5): string {
   const pressed = clean(message.replace(/@[A-Za-z0-9_]+/g, ''));
@@ -67,7 +67,7 @@ export function answerStockQuestion(message: string, entries: StockEntry[], lowT
     'Which items are low or out of stock?': '/low',
   };
   const query = shortcuts[pressed] || (pressed.startsWith('📍 ') ? `/room ${pressed.slice(3)}` : pressed);
-  if (query === '🔎 Find an item') return 'Type /item followed by a name, for example: /item keyboard';
+  if (query === '🔎 Find an item') return '🔎 Find an item\n\nType /item followed by a name.\nExample: /item keyboard';
   if (!query || /^\/(start|help|menu)(\s|$)/i.test(query)) return help;
   if (!entries.length) return 'No inventory items were found in the Sheet.';
 
@@ -88,7 +88,7 @@ export function answerStockQuestion(message: string, entries: StockEntry[], lowT
 
   if (/^\/rooms?$/i.test(query) || /^(list|show) (all )?rooms?$/i.test(query) ||
       (!requestedRoom && !itemTerm && /\b(?:which|what|list|show)\b.*\brooms?\b/i.test(query))) {
-    return `Stock rooms (${rooms.length}):\n${rooms.map(room => `• ${room}`).join('\n')}`.slice(0, 4000);
+    return `🏠 Inventory rooms\n${rooms.length} ${rooms.length === 1 ? 'room' : 'rooms'}\n\n${rooms.map(room => `• ${room}`).join('\n')}\n\nOpen one: /room ${rooms[0]}`;
   }
   if (/^\/summary$/i.test(query) || /^(stock )?(summary|overview|total)$/i.test(query) ||
       (!requestedRoom && !mentionedItem &&
@@ -96,7 +96,7 @@ export function answerStockQuestion(message: string, entries: StockEntry[], lowT
           /\bhow many\b.*\b(?:items?|units?)\b/i.test(query)))) {
     const total = entries.reduce((sum, entry) => sum + entry.quantity, 0);
     const empty = entries.filter(entry => entry.quantity <= 0).length;
-    return `${rooms.length} ${rooms.length === 1 ? 'room' : 'rooms'} · ${entries.length} ${entries.length === 1 ? 'item row' : 'item rows'} · ${total} units\nOut of stock: ${empty} ${empty === 1 ? 'item row' : 'item rows'}.\nUse /rooms, /room ${rooms[0]}, /item keyboard, or /low.`;
+    return `📊 Inventory overview\n\nRooms: ${rooms.length}\nItem rows: ${entries.length}\nUnits: ${total}\nOut of stock: ${empty} ${empty === 1 ? 'row' : 'rows'}\n\nExplore: /rooms · /low · /tabs`;
   }
   if (/^\/low$/i.test(query) || /\b(low|out of stock|missing|zero stock)\b/i.test(query)) {
     const low = entries.filter(entry => entry.quantity <= lowThreshold &&
@@ -104,8 +104,8 @@ export function answerStockQuestion(message: string, entries: StockEntry[], lowT
       (!mentionedItem || mentions(entry.item, mentionedItem))).sort((a, b) => a.quantity - b.quantity);
     if (requestedRoom && !matchingRooms.length) return `I couldn't find room “${clean(requestedRoom)}”. Use /rooms to see names.`;
     return low.length
-      ? `Low stock (≤${lowThreshold} per item row${requestedRoom ? ` in ${matchingRooms.join(', ')}` : ''}):\n${low.map(entry => `• ${entry.item} — ${entry.quantity} in ${entry.room}`).join('\n')}`.slice(0, 4000)
-      : `No item rows${requestedRoom ? ` in ${matchingRooms.join(', ')}` : ''} are at or below ${lowThreshold}.`;
+      ? `⚠️ Low stock${requestedRoom ? ` · ${matchingRooms.join(', ')}` : ''}\n${low.length} ${low.length === 1 ? 'row' : 'rows'} at ${lowThreshold} units or fewer\n\n${low.map(entry => `• ${entry.item} — ${entry.quantity} · ${entry.room}`).join('\n')}`
+      : `✅ No item rows${requestedRoom ? ` in ${matchingRooms.join(', ')}` : ''} are at ${lowThreshold} units or fewer.`;
   }
 
   if (requestedRoom && !matchingRooms.length) return `I couldn't find room “${clean(requestedRoom)}”. Use /rooms to see names.`;
@@ -116,14 +116,15 @@ export function answerStockQuestion(message: string, entries: StockEntry[], lowT
       (!requestedRoom || matchingRooms.includes(entry.room)));
     if (!matches.length) return `I couldn't find “${clean(itemTerm)}”${requestedRoom ? ` in ${matchingRooms.join(', ')}` : ' in stock'}.`;
     const total = matches.reduce((sum, entry) => sum + entry.quantity, 0);
-    return `${total} ${total === 1 ? 'unit' : 'units'} matching “${clean(itemTerm)}”${requestedRoom ? ` in ${matchingRooms.join(', ')}` : ''}:\n${matches.map(entry => `• ${entry.item}: ${entry.quantity} in ${entry.room}`).join('\n')}`.slice(0, 4000);
+    return `🔎 ${clean(itemTerm)}${requestedRoom ? ` · ${matchingRooms.join(', ')}` : ''}\n${total} ${total === 1 ? 'unit' : 'units'} across ${matches.length} ${matches.length === 1 ? 'row' : 'rows'}\n\n${matches.map(entry => `• ${entry.room} · ${entry.item} — ${entry.quantity}`).join('\n')}`;
   }
   if (requestedRoom) {
-    const lines = matchingRooms.flatMap(room => {
+    const blocks = matchingRooms.map(room => {
       const items = entries.filter(entry => entry.room === room);
-      return [`${room} (${items.reduce((sum, entry) => sum + entry.quantity, 0)} units):`, ...items.map(entry => `• ${entry.item}: ${entry.quantity}`)];
+      const total = items.reduce((sum, entry) => sum + entry.quantity, 0);
+      return `📍 ${room}\n${total} ${total === 1 ? 'unit' : 'units'} · ${items.length} ${items.length === 1 ? 'item row' : 'item rows'}\n\n${items.map(entry => `• ${entry.item} — ${entry.quantity}`).join('\n')}`;
     });
-    return lines.join('\n').slice(0, 4000);
+    return blocks.join('\n\n');
   }
   return help;
 }
