@@ -1,6 +1,6 @@
 import { answerStockQuestion, parseStockRows, stockMenuView, stockQuestionKeyboard, type StockEntry } from '../../server/stockBot';
 import { answerSheetQuestion, type SheetTab } from '../../server/sheetBot';
-import { fitBotReply } from '../../server/botReply';
+import { formatBotReply } from '../../server/botReply';
 
 type Env = {
   TELEGRAM_BOT_TOKEN?: string;
@@ -87,7 +87,8 @@ async function sendMessage(token: string, chatId: number, text: string, keyboard
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       chat_id: chatId,
-      text: fitBotReply(text),
+      text: formatBotReply(text),
+      parse_mode: 'HTML',
       ...(keyboard ? { reply_markup: { keyboard, resize_keyboard: true, is_persistent: true, input_field_placeholder: 'Ask about the Sheet' } } : {}),
     }),
   });

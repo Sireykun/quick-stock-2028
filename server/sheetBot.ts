@@ -50,9 +50,10 @@ function typeRecords(tabs: SheetTab[]): TypeRecord[] {
 
 function typeAnswer(query: string, tabs: SheetTab[]): string | null {
   const records = typeRecords(tabs);
-  const modelsOnly = /^\/models?$/i.test(query) || query === '💻 Models' ||
+  const listCommand = query.match(/^\/(types?|models?)(?:\s+(\d+))?$/i);
+  const modelsOnly = /^models?$/i.test(listCommand?.[1] || '') || query === '💻 Models' ||
     /^(?:show|list|what are) (?:the )?models(?: available)?\??$/i.test(query);
-  if (modelsOnly || /^\/types?$/i.test(query) || query === '🔽 Browse types' || query === '🔽 Types' ||
+  if (modelsOnly || listCommand || query === '🔽 Browse types' || query === '🔽 Types' ||
       /\b(?:which|what|list|show)\b.*\b(?:types|models)\b.*\b(?:available|exist|have|sheet)?\b/i.test(query)) {
     const counts = new Map<string, { name: string; count: number }>();
     for (const record of modelsOnly ? records.filter(record => norm(record.tab) !== 'dropdowns') : records) {
@@ -61,13 +62,19 @@ function typeAnswer(query: string, tabs: SheetTab[]): string | null {
       counts.set(id, { name: current?.name || record.type, count: (current?.count || 0) + 1 });
     }
     const values = [...counts.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-    const heading = modelsOnly ? '💻 Models in inventory & templates' : '🔽 Types & models';
+    const heading = modelsOnly ? '💻 Models' : '🔽 Types & models';
+    const pageSize = 8;
+    const pages = Math.max(1, Math.ceil(values.length / pageSize));
+    const page = Math.max(1, Number(listCommand?.[2]) || 1);
+    if (page > pages) return `${heading}\nOnly ${pages} page${pages === 1 ? '' : 's'}.`;
+    const command = modelsOnly ? '/models' : '/types';
     return values.length
-      ? `${heading}\n${values.length} values found\n\n${values.map(value => `• ${value.name} · ${value.count} ${value.count === 1 ? 'row' : 'rows'}`).join('\n')}\n\nSearch: /type Acer Core5`
+      ? `${heading} · ${page}/${pages}\n${values.length} values\n\n${values.slice((page - 1) * pageSize, page * pageSize).map(value => `• ${value.name} · ${value.count}`).join('\n')}${page < pages ? `\n\nNext: ${command} ${page + 1}` : ''}\nFind: /type Acer Core5`
       : `${heading}\n\nNo values found in the Sheet.`;
   }
 
-  const explicit = query.match(/^\/type\s+(.+)$/i)?.[1] ||
+  const typeCommand = query.match(/^\/type\s+(.+?)(?:\s+--page\s+(\d+))?$/i);
+  const explicit = typeCommand?.[1] ||
     query.match(/\b(?:find|search|look up)\s+(?:for\s+)?(?:type|model)\s+(.+?)(?:\?|$)/i)?.[1];
   const known = [...new Set(records.map(record => record.type))].sort((a, b) => b.length - a.length)
     .find(value => matchesWord(query, value));
@@ -83,8 +90,13 @@ function typeAnswer(query: string, tabs: SheetTab[]): string | null {
     const current = grouped.get(id);
     grouped.set(id, { record, count: (current?.count || 0) + 1, units: (current?.units || 0) + (record.quantity || 0) });
   }
+  const matches = [...grouped.values()];
+  const pageSize = 8;
+  const pages = Math.max(1, Math.ceil(matches.length / pageSize));
+  const page = Math.max(1, Number(typeCommand?.[2]) || 1);
+  if (page > pages) return `🔽 ${clean(term)}\nOnly ${pages} page${pages === 1 ? '' : 's'}.`;
   const sections = new Map<string, string[]>();
-  for (const { record, count, units } of grouped.values()) {
+  for (const { record, count, units } of matches.slice((page - 1) * pageSize, page * pageSize)) {
     const detail = [record.room, record.item, record.category].filter(Boolean).join(' · ') || 'Value';
     const amount = record.quantity !== null ? `${units} ${units === 1 ? 'unit' : 'units'}` : count > 1 ? `${count} rows` : '';
     const lines = sections.get(record.tab) || [];
@@ -92,7 +104,7 @@ function typeAnswer(query: string, tabs: SheetTab[]): string | null {
     sections.set(record.tab, lines);
   }
   const shown = [...sections.entries()].map(([name, lines]) => `${name}\n${lines.join('\n')}`);
-  return `🔽 Type / Model: ${clean(term)}\n${found.length} matching ${found.length === 1 ? 'row' : 'rows'}${room ? ` · room ${room}` : ''}\n\n${shown.join('\n\n')}`;
+  return `🔽 ${clean(term)} · ${page}/${pages}\n${found.length} matching rows${room ? ` · room ${room}` : ''}\n\n${shown.join('\n\n')}${page < pages ? `\n\nNext: /type ${clean(term)} --page ${page + 1}` : ''}`;
 }
 
 function rowText(tab: SheetTab, values: string[]): string {
@@ -118,13 +130,13 @@ function tabAnswer(tab: SheetTab, page: number, term?: string): string {
   const rows = body(tab);
   const selected = term ? rows.filter(row => row.values.some(value => matchesWord(value || '', term))) : rows;
   if (!selected.length) return term ? `No rows in ${tab.name} match “${term}”.` : `${tab.name} has no data rows.`;
-  const pageSize = 10;
+  const pageSize = 6;
   const pages = Math.ceil(selected.length / pageSize);
   if (page > pages) return `${tab.name} has ${pages} page${pages === 1 ? '' : 's'}. Use /tab ${tab.name} ${pages}.`;
   const start = (page - 1) * pageSize;
   const lines = selected.slice(start, start + pageSize).map(row => `• ${row.rowNumber}. ${rowText(tab, row.values)}`);
   const next = page < pages ? `\n\nNext page: /tab ${tab.name} ${page + 1}` : '';
-  return `📄 ${tab.name}${term ? ` · ${term}` : ''}\nPage ${page}/${pages} · ${selected.length} ${selected.length === 1 ? 'row' : 'rows'}\n\n${lines.join('\n')}${next}`;
+  return `📄 ${tab.name}${term ? ` · ${term}` : ''} · ${page}/${pages}\n${selected.length} ${selected.length === 1 ? 'row' : 'rows'}\n\n${lines.join('\n')}${next}`;
 }
 
 function namedTab(query: string, tabs: SheetTab[]): SheetTab | undefined {
@@ -178,7 +190,7 @@ function fieldAnswer(query: string, tabs: SheetTab[]): string | null {
     }
   }
   if (!found.length) return `No ${field.toLowerCase()} record matches${item ? ` ${item}` : ''}${room ? ` in room ${room}` : ''}.`;
-  return `🔎 ${field}${item ? ` · ${item}` : ''}${room ? ` · room ${room}` : ''}\n${found.length} ${found.length === 1 ? 'row' : 'rows'}\n\n${found.slice(0, 20).join('\n')}${found.length > 20 ? `\n…${found.length - 20} more rows` : ''}`;
+  return `🔎 ${field}${item ? ` · ${item}` : ''}${room ? ` · room ${room}` : ''}\n${found.length} ${found.length === 1 ? 'row' : 'rows'}\n\n${found.slice(0, 8).join('\n')}${found.length > 8 ? `\n\n${found.length - 8} more. Narrow your question.` : ''}`;
 }
 
 export function answerSheetQuestion(message: string, tabs: SheetTab[]): string | null {
@@ -200,18 +212,23 @@ export function answerSheetQuestion(message: string, tabs: SheetTab[]): string |
     return tab ? tabAnswer(tab, Math.max(1, Number(page?.[2]) || 1)) : `I couldn't find tab “${command[1]}”. Use /tabs to see names.`;
   }
 
-  const search = query.match(/^\/(?:find|search)\s+(.+)$/i)?.[1] ||
+  const searchCommand = query.match(/^\/(?:find|search)\s+(.+?)(?:\s+--page\s+(\d+))?$/i);
+  const search = searchCommand?.[1] ||
     query.match(/\b(?:find|search|look up)\s+(?:the (?:(?:whole|entire) )?sheet\s+)?(?:for\s+)?[“"]?(.+?)[”"]?\??$/i)?.[1];
   if (search) {
     const term = clean(search.replace(/\?$/, '').replace(/\s+(?:across|in)\s+(?:all\s+)?(?:tabs|the sheet)$/i, ''));
     const results = tabs.filter(tab => tab.readable).flatMap(tab =>
       body(tab).filter(row => row.values.some(value => matchesWord(value || '', term)))
         .map(row => ({ tab: tab.name, text: `• Row ${row.rowNumber} · ${rowText(tab, row.values)}` })));
+    const pageSize = 6;
+    const pages = Math.max(1, Math.ceil(results.length / pageSize));
+    const page = Math.max(1, Number(searchCommand?.[2]) || 1);
+    if (page > pages) return `🔎 ${term}\nOnly ${pages} page${pages === 1 ? '' : 's'}.`;
     const sections = new Map<string, string[]>();
-    for (const result of results.slice(0, 15)) sections.set(result.tab, [...(sections.get(result.tab) || []), result.text]);
+    for (const result of results.slice((page - 1) * pageSize, page * pageSize)) sections.set(result.tab, [...(sections.get(result.tab) || []), result.text]);
     const lines = [...sections.entries()].map(([name, rows]) => `${name}\n${rows.join('\n')}`).join('\n\n');
     return results.length
-      ? `🔎 Search: ${term}\n${results.length} matching ${results.length === 1 ? 'row' : 'rows'}\n\n${lines}${results.length > 15 ? `\n\n…${results.length - 15} more rows. Try a narrower search.` : ''}`
+      ? `🔎 ${term} · ${page}/${pages}\n${results.length} matching ${results.length === 1 ? 'row' : 'rows'}\n\n${lines}${page < pages ? `\n\nNext: /find ${term} --page ${page + 1}` : ''}`
       : `🔎 Search: ${term}\n\nNo matching rows in the Sheet.`;
   }
 
