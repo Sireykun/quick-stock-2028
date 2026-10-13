@@ -1,4 +1,4 @@
-import { answerStockQuestion, parseStockRows, stockQuestionKeyboard } from '../../server/stockBot';
+import { answerStockQuestion, parseStockRows, stockQuestionKeyboard, type StockEntry } from '../../server/stockBot';
 
 type Env = {
   TELEGRAM_BOT_TOKEN?: string;
@@ -43,17 +43,22 @@ async function googleGet(url: string, token: string): Promise<any> {
   return response.json();
 }
 
-async function stockRows(env: Env): Promise<string[][]> {
+async function stockEntries(env: Env): Promise<StockEntry[]> {
   const token = await googleAccessToken(env.GOOGLE_SERVICE_ACCOUNT_EMAIL!, env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY!);
   const id = env.STOCK_SPREADSHEET_ID!;
   const metadata = await googleGet(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}?fields=sheets(properties(title))`, token);
   const sheets: string[] = (metadata.sheets || []).map((sheet: any) => sheet.properties?.title).filter(Boolean);
   const wanted = (env.STOCK_SHEET_NAME || 'Stock Room').toLowerCase();
-  const name = sheets.find(sheet => sheet.toLowerCase() === wanted) || sheets.find(sheet => /stock\s*room/i.test(sheet));
-  if (!name) throw new Error('Stock Room tab was not found');
-  const range = encodeURIComponent(`'${name.replace(/'/g, "''")}'!A1:I`);
-  const result = await googleGet(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}/values/${range}`, token);
-  return result.values || [];
+  const stockName = sheets.find(sheet => sheet.toLowerCase() === wanted) || sheets.find(sheet => /stock\s*room/i.test(sheet));
+  if (!stockName) throw new Error('Stock Room tab was not found');
+  const className = sheets.find(sheet => /^(class|classes)$/i.test(sheet));
+  const names = className && className !== stockName ? [stockName, className] : [stockName];
+  const results = await Promise.all(names.map(async name => {
+    const range = encodeURIComponent(`'${name.replace(/'/g, "''")}'!A1:I`);
+    const result = await googleGet(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(id)}/values/${range}`, token);
+    return parseStockRows(result.values || []);
+  }));
+  return results.flat();
 }
 
 async function sendMessage(token: string, chatId: number, text: string, keyboard?: string[][]): Promise<void> {
@@ -99,8 +104,7 @@ export async function onRequestPost({ request, env }: Context): Promise<Response
     return new Response('OK');
   }
   try {
-    const rows = await stockRows(config);
-    const entries = parseStockRows(rows);
+    const entries = await stockEntries(config);
     const answer = answerStockQuestion(message.text, entries, Number(config.STOCK_LOW_THRESHOLD) || 5);
     await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, answer, stockQuestionKeyboard(entries));
     return new Response('OK');

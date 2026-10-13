@@ -19,6 +19,17 @@ test('answers room and item questions from the stock sheet format', () => {
   assert.equal(stockQuestionKeyboard(entries)[2][0], '📍 106');
 });
 
+test('the room 109 question button answers from class inventory', () => {
+  const classEntries = parseStockRows([
+    ['Class Name', 'Item Name', 'Quantity', 'Category', 'Type/Model', 'Hostname', 'SNID', 'Last Updated', 'Status'],
+    ['109', 'Keyboards', '1'],
+    ['', 'Mouse', '1'],
+    ['', 'AIO', '1'],
+  ]);
+  assert.deepEqual(stockQuestionKeyboard(classEntries)[2], ['What is in room 109?']);
+  assert.match(answerStockQuestion('What is in room 109?', classEntries), /^109 \(3 units\):\n• Keyboards: 1\n• Mouse: 1\n• AIO: 1$/);
+});
+
 test('reads the older flat stock sheet format', () => {
   const entries = parseStockRows([
     ['Item Name', 'Quantity', 'Category', 'Type', 'Updated', 'Status', 'Hostname', 'SNID', 'Location'],

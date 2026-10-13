@@ -14,6 +14,7 @@ export function stockQuestionKeyboard(entries: StockEntry[]): string[][] {
   return [
     ['📊 Stock overview', '🏠 Show rooms'],
     ['⚠️ Low stock', '🔎 Find an item'],
+    ...(entries.some(entry => key(entry.room) === '109') ? [['What is in room 109?']] : []),
     ...roomButtons,
     ['❓ Help'],
   ];
@@ -42,7 +43,7 @@ export function parseStockRows(rows: string[][]): StockEntry[] {
   return entries;
 }
 
-const help = 'Tap a question below, or ask about stock:\n/summary — total rooms and items\n/rooms — room list\n/room Stock Room Office — items in a room\n/item keyboard — quantity and rooms\n/low — items with 5 or fewer';
+const help = 'Tap a question below, or ask about stock:\n/summary — total rooms and items\n/rooms — room list\n/room 109 — items in a room\n/item keyboard — quantity and rooms\n/low — items with 5 or fewer';
 
 export function answerStockQuestion(message: string, entries: StockEntry[], lowThreshold = 5): string {
   const pressed = clean(message.replace(/@[A-Za-z0-9_]+/g, ''));
@@ -55,7 +56,7 @@ export function answerStockQuestion(message: string, entries: StockEntry[], lowT
   const query = shortcuts[pressed] || (pressed.startsWith('📍 ') ? `/room ${pressed.slice(3)}` : pressed);
   if (query === '🔎 Find an item') return 'Type /item followed by a name, for example: /item keyboard';
   if (!query || /^\/(start|help|menu)(\s|$)/i.test(query)) return help;
-  if (!entries.length) return 'No stock items were found in the Stock Room sheet.';
+  if (!entries.length) return 'No inventory items were found in the Sheet.';
 
   const rooms = [...new Set(entries.map(entry => entry.room))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   if (/^\/rooms?$/i.test(query) || /^(list|show) (all )?rooms?$/i.test(query)) {
