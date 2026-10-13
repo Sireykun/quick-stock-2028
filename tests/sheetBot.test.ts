@@ -27,6 +27,11 @@ test('lists and browses all readable sheet tabs', () => {
   assert.match(answerSheetQuestion('🧾 Item names', tabs)!, /Item Name: HDMI/);
   assert.match(answerSheetQuestion('Show the Lab_Template', tabs)!, /Default Type: Acer Core5/);
   assert.match(answerSheetQuestion('What dropdown values are available?', tabs)!, /Acer Core5/);
+  assert.match(answerSheetQuestion('/types', tabs)!, /Acer Core5/);
+  assert.match(answerSheetQuestion('🔽 Browse types', tabs)!, /acer/);
+  assert.match(answerSheetQuestion('/type Acer Core5', tabs)!, /Lab_Template.*AIO.*Acer Core5/);
+  assert.match(answerSheetQuestion('Find type Acer Core5', tabs)!, /Dropdowns.*Computer.*Acer Core5/);
+  assert.match(answerSheetQuestion('/type acer in room 109', tabs)!, /CLASS · 109 · Keyboards.*acer/);
   assert.match(answerSheetQuestion('/tab Dashboard', tabs)!, /no readable cells/);
 });
 

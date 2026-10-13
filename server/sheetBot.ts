@@ -21,6 +21,70 @@ const body = (tab: SheetTab) => {
   });
 };
 
+type TypeRecord = { tab: string; type: string; room: string; item: string; category: string; quantity: number | null };
+
+function typeRecords(tabs: SheetTab[]): TypeRecord[] {
+  return tabs.filter(tab => tab.readable).flatMap(tab => {
+    const headers = (tab.rows[0] || []).map(norm);
+    const dropdown = norm(tab.name) === 'dropdowns';
+    const typeIndex = dropdown ? headers.indexOf('value') : headers.findIndex(header => /^(type\/model|default type)$/.test(header));
+    if (typeIndex < 0) return [];
+    const itemIndex = headers.indexOf('item name');
+    const quantityIndex = headers.indexOf('quantity');
+    const categoryIndex = headers.indexOf('category') >= 0 ? headers.indexOf('category') : headers.indexOf('default tag');
+    return body(tab).flatMap(row => {
+      if (dropdown && norm(row.values[0] || '') !== 'type') return [];
+      const type = clean(row.values[typeIndex] || '');
+      if (!type) return [];
+      return [{
+        tab: tab.name,
+        type,
+        room: /^(class name|location|room)$/.test(headers[0] || '') ? clean(row.values[0] || '') : '',
+        item: itemIndex >= 0 ? clean(row.values[itemIndex] || '') : '',
+        category: dropdown ? clean(row.values[2] || '') : categoryIndex >= 0 ? clean(row.values[categoryIndex] || '') : '',
+        quantity: quantityIndex >= 0 ? Number(row.values[quantityIndex]) || 0 : null,
+      }];
+    });
+  });
+}
+
+function typeAnswer(query: string, tabs: SheetTab[]): string | null {
+  const records = typeRecords(tabs);
+  if (/^\/types?$/i.test(query) || query === '🔽 Browse types' ||
+      /\b(?:which|what|list|show)\b.*\b(?:types|models)\b.*\b(?:available|exist|have|sheet)?\b/i.test(query)) {
+    const counts = new Map<string, { name: string; count: number }>();
+    for (const record of records) {
+      const id = norm(record.type);
+      const current = counts.get(id);
+      counts.set(id, { name: current?.name || record.type, count: (current?.count || 0) + 1 });
+    }
+    const values = [...counts.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    return values.length
+      ? `Types/Models (${values.length}):\n${values.map(value => `• ${value.name} (${value.count} rows)`).join('\n')}\nSearch one: /type Acer Core5`.slice(0, 4000)
+      : 'No Type/Model values were found in the Sheet.';
+  }
+
+  const explicit = query.match(/^\/type\s+(.+)$/i)?.[1] ||
+    query.match(/\b(?:find|search|look up)\s+(?:for\s+)?(?:type|model)\s+(.+?)(?:\?|$)/i)?.[1];
+  const known = [...new Set(records.map(record => record.type))].sort((a, b) => b.length - a.length)
+    .find(value => matchesWord(query, value));
+  const term = explicit?.replace(/\s+in\s+(?:room|class)\s+\d+[a-z]?$/i, '') ||
+    (/\b(?:type|model)\b/i.test(query) ? known : undefined);
+  if (!term) return null;
+  const room = query.match(/\b(?:room|class)\s+(\d+[a-z]?)\b/i)?.[1];
+  const found = records.filter(record => norm(record.type).includes(norm(term)) && (!room || norm(record.room) === norm(room)));
+  if (!found.length) return `I couldn't find Type/Model “${clean(term)}”${room ? ` in room ${room}` : ''}. Use /types to see available values.`;
+  const grouped = new Map<string, { record: TypeRecord; count: number; units: number }>();
+  for (const record of found) {
+    const id = [record.tab, record.room, record.item, record.category, record.type].map(norm).join('|');
+    const current = grouped.get(id);
+    grouped.set(id, { record, count: (current?.count || 0) + 1, units: (current?.units || 0) + (record.quantity || 0) });
+  }
+  const lines = [...grouped.values()].map(({ record, count, units }) =>
+    `• ${record.tab}${record.room ? ` · ${record.room}` : ''}${record.item ? ` · ${record.item}` : ''}${record.category ? ` · ${record.category}` : ''} — ${record.type}${record.quantity !== null ? ` · ${units} units` : count > 1 ? ` · ${count} rows` : ''}`);
+  return `Type/Model “${clean(term)}” (${found.length} rows):\n${lines.slice(0, 25).join('\n')}${lines.length > 25 ? `\n…${lines.length - 25} more matches` : ''}`.slice(0, 4000);
+}
+
 function rowText(tab: SheetTab, values: string[]): string {
   const headers = tab.rows[0] || [];
   const fields = values.map((value, index) => ({ label: clean(headers[index] || `Column ${index + 1}`), value: clean(value || '') }))
@@ -99,6 +163,8 @@ function fieldAnswer(query: string, tabs: SheetTab[]): string | null {
 export function answerSheetQuestion(message: string, tabs: SheetTab[]): string | null {
   const query = clean(message.replace(/@[A-Za-z0-9_]+/g, ''));
   if (!query) return null;
+  const typeResult = typeAnswer(query, tabs);
+  if (typeResult) return typeResult;
   if (/^\/tabs?$/i.test(query) || query === '📄 All sheet tabs' ||
       /\b(?:which|what|list|show)\b.*\b(?:sheet tabs|tabs in the sheet)\b/i.test(query)) {
     return `Sheet tabs:\n${tabs.map(tab => `• ${tab.name}${tab.readable ? ` — ${body(tab).length} data rows` : ' — dashboard'}`).join('\n')}\nUse /tab followed by a name to browse rows.`.slice(0, 4000);
