@@ -24,12 +24,16 @@ test('lists and browses all readable sheet tabs', () => {
   assert.match(answerSheetQuestion('/tabs', tabs)!, /Item Master — 3 rows/);
   assert.match(answerSheetQuestion('/tabs', tabs)!, /Dashboard — dashboard/);
   assert.match(answerSheetQuestion('📄 All sheet tabs', tabs)!, /Lab_Template/);
+  assert.match(answerSheetQuestion('📄 Sheet tabs', tabs)!, /Lab_Template/);
   assert.match(answerSheetQuestion('What is in Item Master?', tabs)!, /3\. Keyboards/);
   assert.match(answerSheetQuestion('🧾 Item names', tabs)!, /4\. HDMI/);
   assert.match(answerSheetQuestion('Show the Lab_Template', tabs)!, /Type: Acer Core5/);
   assert.match(answerSheetQuestion('What dropdown values are available?', tabs)!, /Acer Core5/);
   assert.match(answerSheetQuestion('/types', tabs)!, /Acer Core5/);
   assert.match(answerSheetQuestion('🔽 Browse types', tabs)!, /acer/);
+  assert.match(answerSheetQuestion('🔽 Types', tabs)!, /Acer Core5/);
+  assert.match(answerSheetQuestion('💻 Models', tabs)!, /Acer Core5/);
+  assert.doesNotMatch(answerSheetQuestion('💻 Models', tabs)!, /Dropdowns/);
   assert.match(answerSheetQuestion('/type Acer Core5', tabs)!, /Lab_Template\n• AIO · Computer — Acer Core5/);
   assert.match(answerSheetQuestion('Find type Acer Core5', tabs)!, /Dropdowns\n• Computer — Acer Core5/);
   assert.match(answerSheetQuestion('/type acer in room 109', tabs)!, /CLASS\n• 109 · Keyboards.*acer/);

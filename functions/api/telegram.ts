@@ -1,4 +1,4 @@
-import { answerStockQuestion, parseStockRows, stockQuestionKeyboard, type StockEntry } from '../../server/stockBot';
+import { answerStockQuestion, parseStockRows, stockMenuView, stockQuestionKeyboard, type StockEntry } from '../../server/stockBot';
 import { answerSheetQuestion, type SheetTab } from '../../server/sheetBot';
 import { fitBotReply } from '../../server/botReply';
 
@@ -113,7 +113,7 @@ export async function onRequestPost({ request, env }: Context): Promise<Response
     const { tabs, entries } = await sheetData(config);
     const answer = answerSheetQuestion(message.text, tabs) ||
       answerStockQuestion(message.text, entries, Number(config.STOCK_LOW_THRESHOLD) || 5);
-    await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, answer, stockQuestionKeyboard(entries));
+    await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, answer, stockQuestionKeyboard(entries, stockMenuView(message.text)));
     return new Response('OK');
   } catch (error) {
     console.error('Stock bot failed:', error);

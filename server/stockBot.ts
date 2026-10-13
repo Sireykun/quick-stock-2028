@@ -10,24 +10,35 @@ function mentions(query: string, name: string): boolean {
   return new RegExp(`(^|[^a-z0-9])${escapeRegex(word)}s?($|[^a-z0-9])`, 'i').test(query);
 }
 
-export function stockQuestionKeyboard(entries: StockEntry[]): string[][] {
+export type StockMenuView = 'main' | 'items' | 'rooms';
+
+export function stockMenuView(message: string): StockMenuView {
+  const choice = clean(message.replace(/@[A-Za-z0-9_]+/g, ''));
+  if (choice === '📦 Items' || choice === '🧾 Item names' || choice === '🔽 Types' ||
+      choice === '💻 Models' || choice === '🔎 Search item' || choice === '🔎 Find an item' ||
+      /^\/(?:item|type|types|model|models)(?:\s|$)/i.test(choice)) return 'items';
+  if (choice === '🏠 Rooms' || choice === '🏠 Show rooms' || choice === '🔎 Find room' ||
+      choice.startsWith('📍 ') || /^\/rooms?(?:\s|$)/i.test(choice)) return 'rooms';
+  return 'main';
+}
+
+export function stockQuestionKeyboard(entries: StockEntry[], view: StockMenuView = 'main'): string[][] {
+  if (view === 'items') return [
+    ['🧾 Item names', '🔽 Types'],
+    ['💻 Models', '🔎 Search item'],
+    ['⬅️ Back'],
+  ];
   const rooms = [...new Set(entries.map(entry => entry.room))]
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-    .slice(0, 4);
-  const roomButtons: string[][] = [];
-  for (let index = 0; index < rooms.length; index += 2) {
-    roomButtons.push(rooms.slice(index, index + 2).map(room => `📍 ${room}`));
-  }
+    .slice(0, 6);
+  if (view === 'rooms') return [
+    ...rooms.map(room => [`📍 ${room}`]),
+    ['🔎 Find room', '⬅️ Back'],
+  ];
   return [
-    ['📊 Stock overview', '🏠 Show rooms'],
-    ['⚠️ Low stock', '🔎 Find an item'],
-    ['📄 All sheet tabs', '🧾 Item names'],
-    ['🔽 Browse types'],
-    ['How many items do we have in total?'],
-    ['Which items are low or out of stock?'],
-    ...(entries.some(entry => key(entry.room) === '109') ? [['What is in room 109?']] : []),
-    ...roomButtons,
-    ['❓ Help'],
+    ['📦 Items', '🏠 Rooms'],
+    ['📊 Overview', '⚠️ Low stock'],
+    ['📄 Sheet tabs', '❓ Help'],
   ];
 }
 
@@ -59,7 +70,9 @@ const help = '👋 Quick Stock bot\n\nAsk about a room, an item, a Type/Model, o
 export function answerStockQuestion(message: string, entries: StockEntry[], lowThreshold = 5): string {
   const pressed = clean(message.replace(/@[A-Za-z0-9_]+/g, ''));
   const shortcuts: Record<string, string> = {
+    '📊 Overview': '/summary',
     '📊 Stock overview': '/summary',
+    '🏠 Rooms': '/rooms',
     '🏠 Show rooms': '/rooms',
     '⚠️ Low stock': '/low',
     '❓ Help': '/help',
@@ -67,6 +80,10 @@ export function answerStockQuestion(message: string, entries: StockEntry[], lowT
     'Which items are low or out of stock?': '/low',
   };
   const query = shortcuts[pressed] || (pressed.startsWith('📍 ') ? `/room ${pressed.slice(3)}` : pressed);
+  if (query === '📦 Items') return '📦 Items\n\nChoose Item names, Types, or Models below. To search, tap Search item.';
+  if (query === '⬅️ Back') return 'Main menu\n\nChoose Items, Rooms, Overview, or Sheet tabs.';
+  if (query === '🔎 Find room') return '🔎 Find a room\n\nType /room followed by a room name.\nExample: /room 1F Printer Room';
+  if (query === '🔎 Search item') return '🔎 Search an item\n\nType /item followed by an item name.\nExample: /item keyboard';
   if (query === '🔎 Find an item') return '🔎 Find an item\n\nType /item followed by a name.\nExample: /item keyboard';
   if (!query || /^\/(start|help|menu)(\s|$)/i.test(query)) return help;
   if (!entries.length) return 'No inventory items were found in the Sheet.';
@@ -88,7 +105,7 @@ export function answerStockQuestion(message: string, entries: StockEntry[], lowT
 
   if (/^\/rooms?$/i.test(query) || /^(list|show) (all )?rooms?$/i.test(query) ||
       (!requestedRoom && !itemTerm && /\b(?:which|what|list|show)\b.*\brooms?\b/i.test(query))) {
-    return `🏠 Inventory rooms\n${rooms.length} ${rooms.length === 1 ? 'room' : 'rooms'}\n\n${rooms.map(room => `• ${room}`).join('\n')}\n\nOpen one: /room ${rooms[0]}`;
+    return `🏠 Inventory rooms\n${rooms.length} ${rooms.length === 1 ? 'room' : 'rooms'}\n\n${rooms.map(room => `• ${room}`).join('\n')}\n\nTap a room below, or type /room <name>.`;
   }
   if (/^\/summary$/i.test(query) || /^(stock )?(summary|overview|total)$/i.test(query) ||
       (!requestedRoom && !mentionedItem &&

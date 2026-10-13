@@ -50,18 +50,21 @@ function typeRecords(tabs: SheetTab[]): TypeRecord[] {
 
 function typeAnswer(query: string, tabs: SheetTab[]): string | null {
   const records = typeRecords(tabs);
-  if (/^\/types?$/i.test(query) || query === '🔽 Browse types' ||
+  const modelsOnly = /^\/models?$/i.test(query) || query === '💻 Models' ||
+    /^(?:show|list|what are) (?:the )?models(?: available)?\??$/i.test(query);
+  if (modelsOnly || /^\/types?$/i.test(query) || query === '🔽 Browse types' || query === '🔽 Types' ||
       /\b(?:which|what|list|show)\b.*\b(?:types|models)\b.*\b(?:available|exist|have|sheet)?\b/i.test(query)) {
     const counts = new Map<string, { name: string; count: number }>();
-    for (const record of records) {
+    for (const record of modelsOnly ? records.filter(record => norm(record.tab) !== 'dropdowns') : records) {
       const id = norm(record.type);
       const current = counts.get(id);
       counts.set(id, { name: current?.name || record.type, count: (current?.count || 0) + 1 });
     }
     const values = [...counts.values()].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    const heading = modelsOnly ? '💻 Models in inventory & templates' : '🔽 Types & models';
     return values.length
-      ? `🔽 Types & models\n${values.length} values found\n\n${values.map(value => `• ${value.name} · ${value.count} ${value.count === 1 ? 'row' : 'rows'}`).join('\n')}\n\nSearch: /type Acer Core5`
-      : '🔽 Types & models\n\nNo values found in the Sheet.';
+      ? `${heading}\n${values.length} values found\n\n${values.map(value => `• ${value.name} · ${value.count} ${value.count === 1 ? 'row' : 'rows'}`).join('\n')}\n\nSearch: /type Acer Core5`
+      : `${heading}\n\nNo values found in the Sheet.`;
   }
 
   const explicit = query.match(/^\/type\s+(.+)$/i)?.[1] ||
@@ -183,7 +186,7 @@ export function answerSheetQuestion(message: string, tabs: SheetTab[]): string |
   if (!query) return null;
   const typeResult = typeAnswer(query, tabs);
   if (typeResult) return typeResult;
-  if (/^\/tabs?$/i.test(query) || query === '📄 All sheet tabs' ||
+  if (/^\/tabs?$/i.test(query) || query === '📄 All sheet tabs' || query === '📄 Sheet tabs' ||
       /\b(?:which|what|list|show)\b.*\b(?:sheet tabs|tabs in the sheet)\b/i.test(query)) {
     return `📄 Sheet tabs\n${tabs.length} tabs\n\n${tabs.map(tab => `• ${tab.name}${tab.readable ? ` — ${body(tab).length} ${body(tab).length === 1 ? 'row' : 'rows'}` : ' — dashboard'}`).join('\n')}\n\nOpen: /tab Item Master`;
   }

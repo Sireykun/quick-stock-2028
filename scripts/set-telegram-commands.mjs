@@ -11,6 +11,7 @@ const commands = [
   { command: 'tab', description: 'Browse a tab, for example Item Master' },
   { command: 'find', description: 'Search all tabs for a value' },
   { command: 'types', description: 'List Type/Model values' },
+  { command: 'models', description: 'List models in inventory' },
   { command: 'type', description: 'Find items by Type/Model' },
   { command: 'summary', description: 'See total rooms and inventory' },
   { command: 'rooms', description: 'List inventory rooms' },
