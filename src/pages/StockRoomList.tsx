@@ -2,7 +2,7 @@ import { FluidSpinner } from "../components/FluidSpinner";
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getSpreadsheetMetadata, getLocations, formatStockColors, SheetRow, getInventory, getAllClassesAndItems as getAllLocationsAndItems, addClassToInventory } from '../lib/sheets';
-import { RefreshCw, AlertCircle, Layers, ChevronRight, Plus, X, CheckCheck, Search, Palette, ArrowDownAZ, ArrowUpAZ, ArrowUpDown, FileText, Printer, Copy, Warehouse } from 'lucide-react';
+import { RefreshCw, AlertCircle, Layers, ChevronRight, Plus, X, CheckCheck, Search, Palette, ArrowDownAZ, ArrowUpAZ, ArrowUpDown, FileText, Printer, Copy, Warehouse, Download, CalendarDays } from 'lucide-react';
 import { getRoomPhotos } from '../lib/roomPhotos';
 
 export function StockRoomList() {
@@ -28,6 +28,12 @@ export function StockRoomList() {
   
   const [showTextReport, setShowTextReport] = useState(false);
   const [textReportContent, setTextReportContent] = useState('');
+  const [reportMonth, setReportMonth] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [monthlyPdfLoading, setMonthlyPdfLoading] = useState(false);
+  const [monthlyPdfError, setMonthlyPdfError] = useState<string | null>(null);
 
   const sheetId = localStorage.getItem('quickStock_classesSheetId') || '';
 
@@ -137,6 +143,31 @@ export function StockRoomList() {
     }
   };
 
+  const handleDownloadMonthlyInventory = async () => {
+    if (!sheetId || !reportMonth || monthlyPdfLoading) return;
+    setMonthlyPdfLoading(true);
+    setMonthlyPdfError(null);
+    try {
+      const inventory = await getAllLocationsAndItems(sheetId, mainTabName);
+      const rooms = locations.map(location => ({
+        name: location.title,
+        items: Object.entries(inventory).find(([name]) => name.trim().toLowerCase() === location.title.trim().toLowerCase())?.[1] || [],
+      }));
+      for (const [name, items] of Object.entries(inventory)) {
+        if (!rooms.some(room => room.name.trim().toLowerCase() === name.trim().toLowerCase())) {
+          rooms.push({ name, items });
+        }
+      }
+      if (rooms.length === 0) throw new Error('No stock locations are available for the PDF.');
+      const { downloadMonthlyInventoryPdf } = await import('../lib/monthlyInventoryPdf');
+      await downloadMonthlyInventoryPdf(reportMonth, rooms);
+    } catch (err: any) {
+      setMonthlyPdfError(err.message || 'Could not create the monthly inventory PDF.');
+    } finally {
+      setMonthlyPdfLoading(false);
+    }
+  };
+
   const filteredLocations = locations.filter(cls => 
     cls.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -210,6 +241,30 @@ export function StockRoomList() {
           </button>
         </div>
       </div>
+
+      <section className="nova-panel p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4" aria-label="Monthly inventory PDF">
+        <div className="flex items-start gap-3">
+          <span className="w-11 h-11 shrink-0 rounded-2xl bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 flex items-center justify-center"><FileText className="w-5 h-5" /></span>
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">Monthly inventory PDF</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Download a room-by-room count sheet with current quantities and space for physical counts.</p>
+          </div>
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-3 lg:shrink-0">
+          <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 flex flex-col gap-1" htmlFor="monthly-inventory-month">
+            Report month
+            <span className="relative">
+              <CalendarDays className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input id="monthly-inventory-month" type="month" value={reportMonth} onChange={event => setReportMonth(event.target.value)} className="w-full sm:w-44 pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-400" />
+            </span>
+          </label>
+          <button type="button" onClick={handleDownloadMonthlyInventory} disabled={monthlyPdfLoading || !sheetId || locations.length === 0 || !reportMonth} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-bold text-white transition-colors min-h-11">
+            {monthlyPdfLoading ? <FluidSpinner size="sm" /> : <Download className="w-4 h-4" />}
+            {monthlyPdfLoading ? 'Preparing PDF...' : 'Download PDF'}
+          </button>
+        </div>
+      </section>
+      {monthlyPdfError && <p role="alert" className="text-sm text-red-700 dark:text-red-400">{monthlyPdfError}</p>}
 
       {locations.length > 0 && (
         <div className="relative">
