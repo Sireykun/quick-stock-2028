@@ -65,11 +65,18 @@ async function sendMessage(token: string, chatId: number, text: string): Promise
 }
 
 export async function onRequestPost({ request, env }: Context): Promise<Response> {
-  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_WEBHOOK_SECRET || !env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
-      !env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || !env.STOCK_SPREADSHEET_ID) {
+  const config: Env = {
+    ...env,
+    TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN?.trim(),
+    TELEGRAM_WEBHOOK_SECRET: env.TELEGRAM_WEBHOOK_SECRET?.trim(),
+    GOOGLE_SERVICE_ACCOUNT_EMAIL: env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim(),
+    STOCK_SPREADSHEET_ID: env.STOCK_SPREADSHEET_ID?.trim(),
+  };
+  if (!config.TELEGRAM_BOT_TOKEN || !config.TELEGRAM_WEBHOOK_SECRET || !config.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
+      !config.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || !config.STOCK_SPREADSHEET_ID) {
     return new Response('Bot is not configured', { status: 503 });
   }
-  if (request.headers.get('X-Telegram-Bot-Api-Secret-Token') !== env.TELEGRAM_WEBHOOK_SECRET) {
+  if (request.headers.get('X-Telegram-Bot-Api-Secret-Token') !== config.TELEGRAM_WEBHOOK_SECRET) {
     return new Response('Forbidden', { status: 403 });
   }
   let update: TelegramUpdate;
@@ -79,22 +86,22 @@ export async function onRequestPost({ request, env }: Context): Promise<Response
   const userId = message?.from?.id;
   if (!message?.text || !chatId || !userId || message.chat?.type !== 'private') return new Response('OK');
   if (/^\/id(?:@\w+)?$/i.test(message.text.trim())) {
-    await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, `Your Telegram user ID: ${userId}`);
+    await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, `Your Telegram user ID: ${userId}`);
     return new Response('OK');
   }
-  const allowed = (env.TELEGRAM_ALLOWED_USER_IDS || '').split(',').map(value => value.trim()).filter(Boolean);
+  const allowed = (config.TELEGRAM_ALLOWED_USER_IDS || '').split(',').map(value => value.trim()).filter(Boolean);
   if (!allowed.includes(String(userId))) {
-    await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, 'Access is restricted. Send /id to see your user ID, then ask the Quick Stock owner to add it.');
+    await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, 'Access is restricted. Send /id to see your user ID, then ask the Quick Stock owner to add it.');
     return new Response('OK');
   }
   try {
-    const rows = await stockRows(env);
-    const answer = answerStockQuestion(message.text, parseStockRows(rows), Number(env.STOCK_LOW_THRESHOLD) || 5);
-    await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, answer);
+    const rows = await stockRows(config);
+    const answer = answerStockQuestion(message.text, parseStockRows(rows), Number(config.STOCK_LOW_THRESHOLD) || 5);
+    await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, answer);
     return new Response('OK');
   } catch (error) {
     console.error('Stock bot failed:', error);
-    await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, 'I could not read stock right now. Please try again later.');
+    await sendMessage(config.TELEGRAM_BOT_TOKEN, chatId, 'I could not read stock right now. Please try again later.');
     return new Response('OK');
   }
 }
