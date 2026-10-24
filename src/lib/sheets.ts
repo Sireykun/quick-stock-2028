@@ -2032,55 +2032,46 @@ export async function moveItemToClassOrStock(
   moveQuantity?: string
 ): Promise<void> {
   const meta = await getSpreadsheetMetadata(spreadsheetId);
-  const targetSheet = meta.sheets.find(
-    (s) => s.properties.title.toLowerCase() === targetTabName.toLowerCase()
-  ) || meta.sheets[0];
-
-  const targetSheetNumericalId = targetSheet.properties.sheetId;
-  const actualTargetTabName = targetSheet.properties.title;
-
-  let lastRow = await getClassLastRow(spreadsheetId, actualTargetTabName, targetClassName);
-  if (lastRow === null) {
-    await addClassToInventory(spreadsheetId, actualTargetTabName, targetClassName);
-    lastRow = await getClassLastRow(spreadsheetId, actualTargetTabName, targetClassName);
+  const sourceSheet = meta.sheets.find(s => s.properties.title.toLowerCase() === sourceTabName.toLowerCase());
+  const targetSheet = meta.sheets.find(s => s.properties.title.toLowerCase() === targetTabName.toLowerCase());
+  if (!sourceSheet || !targetSheet) throw new Error('Source or destination sheet was not found.');
+  if (sourceSheet.properties.sheetId === targetSheet.properties.sheetId && sourceClassName.trim().toLowerCase() === targetClassName.trim().toLowerCase()) return;
+  const current = (await getClassInventory(spreadsheetId, sourceTabName, sourceClassName)).find(r => r.row === item.row);
+  if (!current || ['item', 'quantity', 'tag', 'type', 'hostname', 'snid', 'status'].some(key => (current[key] || '') !== (item[key] || ''))) {
+    throw new Error('This item changed. Refresh before moving it.');
   }
-
-  const qtyToMoveStr = moveQuantity || item.quantity || '1';
-  const moveQtyInt = parseInt(qtyToMoveStr) || 0;
-  const currentQtyInt = parseInt(item.quantity) || 0;
-
-  if (lastRow !== null) {
-    await addItemToClass(
-      spreadsheetId,
-      targetSheetNumericalId,
-      actualTargetTabName,
-      targetClassName,
-      item.item || '',
-      lastRow,
-      qtyToMoveStr,
-      item.tag || '',
-      item.type || '',
-      item.hostname || '',
-      item.snid || ''
-    );
-    await formatClassColors(spreadsheetId, targetSheetNumericalId, actualTargetTabName);
+  const quantity = Number(moveQuantity || current.quantity || '1');
+  const available = Number(current.quantity);
+  if (!Number.isFinite(quantity) || quantity <= 0 || quantity > available) throw new Error('Move quantity must be positive and no greater than the available quantity.');
+  const targetName = targetSheet.properties.title;
+  await ensureStockSheetMigrated(spreadsheetId, targetName);
+  let insertIndex = await getClassLastRow(spreadsheetId, targetName, targetClassName);
+  const now = new Date().toLocaleString();
+  const targetRows: string[][] = [];
+  if (insertIndex === null) {
+    const range = encodeURIComponent(`'${targetName.replace(/'/g, "''")}'!A1:I`);
+    const data = await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`);
+    insertIndex = Math.max(1, data.values?.length || 0);
+    const defaults = targetClassName.toLowerCase().startsWith('lab') ? await getLabTemplate(spreadsheetId) : await getClassTemplate(spreadsheetId);
+    for (const entry of defaults) targetRows.push([targetRows.length ? '' : targetClassName, entry.name, '0', entry.tag || '', entry.type || '', '', '', now, '']);
   }
-
-  if (moveQtyInt >= currentQtyInt || currentQtyInt <= 0) {
-    await deleteClassItems(
-      spreadsheetId,
-      sourceSheetId,
-      sourceTabName,
-      [item.row],
-      sourceClassName
-    );
-    await formatClassColors(spreadsheetId, sourceSheetId, sourceTabName);
-  } else {
-    const newQty = (currentQtyInt - moveQtyInt).toString();
-    await updateClassInventory(spreadsheetId, sourceTabName, [
-      { ...item, quantity: newQty }
-    ]);
-  }
+  targetRows.push([targetRows.length ? '' : targetClassName, current.item, String(quantity), current.tag || '', current.type || '', current.hostname || '', current.snid || '', now, current.status || '']);
+  // Both sides commit in one Google Sheets batch. Keep the source's location cell
+  // when removing its last item so grouped rows retain their classroom/location.
+  const sourceValues = quantity === available ? ['', '', '', '', '', '', now, ''] : [current.item, String(available - quantity), current.tag || '', current.type || '', current.hostname || '', current.snid || '', now, current.status || ''];
+  await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+    method: 'POST',
+    body: JSON.stringify({ requests: [
+      { updateCells: { start: { sheetId: sourceSheet.properties.sheetId, rowIndex: current.row - 1, columnIndex: 1 }, rows: [{ values: sourceValues.map(stringValue => ({ userEnteredValue: { stringValue } })) }], fields: 'userEnteredValue' } },
+      { insertDimension: { range: { sheetId: targetSheet.properties.sheetId, dimension: 'ROWS', startIndex: insertIndex, endIndex: insertIndex + targetRows.length }, inheritFromBefore: true } },
+      { updateCells: { start: { sheetId: targetSheet.properties.sheetId, rowIndex: insertIndex, columnIndex: 0 }, rows: targetRows.map(row => ({ values: row.map(stringValue => ({ userEnteredValue: { stringValue } })) })), fields: 'userEnteredValue' } },
+    ] }),
+  });
+  // Cosmetic updates must not turn a committed movement into a failed operation.
+  await Promise.all([
+    formatClassColors(spreadsheetId, sourceSheet.properties.sheetId, sourceTabName).catch(() => {}),
+    formatClassColors(spreadsheetId, targetSheet.properties.sheetId, targetName).catch(() => {}),
+  ]);
 }
 
 
