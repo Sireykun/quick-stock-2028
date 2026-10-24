@@ -6,14 +6,18 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
 const provider = new GoogleAuthProvider();
-// Request Google Sheets scope
-provider.addScope('https://www.googleapis.com/auth/spreadsheets');
+const sheetsProvider = new GoogleAuthProvider();
+sheetsProvider.addScope('https://www.googleapis.com/auth/spreadsheets');
 
 // Flag to indicate if we are in the middle of a sign-in flow.
 let isSigningIn = false;
 
 // Cache the access token in memory.
 let cachedAccessToken: string | null = null;
+let cachedDriveToken: string | null = null;
+let currentAppRole: 'owner' | 'editor' | 'viewer' | null = null;
+export const setAppRole = (role: typeof currentAppRole) => { currentAppRole = role; };
+export const getAppRole = () => currentAppRole;
 
 // Initialize auth state listener. Call this on app load.
 export const initAuth = (
@@ -32,11 +36,7 @@ export const initAuth = (
         // but it is in the same file. Wait, cachedAccessToken is in this file.
       }
 
-      if (activeToken) {
-        if (onAuthSuccess) onAuthSuccess(user, activeToken);
-      } else if (!isSigningIn) {
-        if (onAuthFailure) onAuthFailure();
-      }
+      if (onAuthSuccess) onAuthSuccess(user, activeToken || '');
     } else {
       // cachedAccessToken = null; // wait, let's just let it be
       if (onAuthFailure) onAuthFailure();
@@ -45,18 +45,13 @@ export const initAuth = (
 };
 
 // Must be called from a button click or user interaction
-export const googleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
+export const googleSignIn = async (): Promise<{ user: User } | null> => {
   try {
     isSigningIn = true;
+    cachedAccessToken = null;
+    localStorage.removeItem('quickStock_google_oauth_token');
     const result = await signInWithPopup(auth, provider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (!credential?.accessToken) {
-      throw new Error('Failed to get access token from Firebase Auth');
-    }
-
-    cachedAccessToken = credential.accessToken;
-    localStorage.setItem('quickStock_google_oauth_token', credential.accessToken);
-    return { user: result.user, accessToken: cachedAccessToken };
+    return { user: result.user };
   } catch (error: any) {
     if (error?.code !== 'auth/popup-closed-by-user') {
       console.error('Sign in error:', error);
@@ -70,7 +65,7 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
 export const authorizeGoogleSheets = async (): Promise<string | null> => {
   try {
     isSigningIn = true;
-    const result = await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, sheetsProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (!credential?.accessToken) {
       throw new Error('Failed to get access token from Google');
@@ -88,6 +83,22 @@ export const authorizeGoogleSheets = async (): Promise<string | null> => {
   }
 };
 
+export const authorizeGoogleDrive = async (): Promise<string> => {
+  const driveProvider = new GoogleAuthProvider();
+  driveProvider.addScope('https://www.googleapis.com/auth/spreadsheets');
+  driveProvider.addScope('https://www.googleapis.com/auth/drive');
+  driveProvider.setCustomParameters({ prompt: 'consent' });
+  const result = await signInWithPopup(auth, driveProvider);
+  const token = GoogleAuthProvider.credentialFromResult(result)?.accessToken;
+  if (!token) throw new Error('Google Drive permission was not granted.');
+  cachedDriveToken = token;
+  cachedAccessToken = token;
+  localStorage.setItem('quickStock_google_oauth_token', token);
+  return token;
+};
+
+export const getDriveToken = () => cachedDriveToken;
+
 export const getAccessToken = (): string | null => {
   if (cachedAccessToken && cachedAccessToken !== 'dummy_token_for_email_login') {
     return cachedAccessToken;
@@ -99,9 +110,12 @@ export const getAccessToken = (): string | null => {
   return cachedAccessToken;
 };
 
+export const getFirebaseIdToken = async (): Promise<string | null> => auth.currentUser ? auth.currentUser.getIdToken() : null;
+
 export const logout = async () => {
   await auth.signOut();
   cachedAccessToken = null;
+  cachedDriveToken = null;
   localStorage.removeItem('quickStock_google_oauth_token');
 };
 

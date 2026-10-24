@@ -1,4 +1,5 @@
 import type { SheetRow } from './sheets';
+import { loadKhmerPdfFont, pdfText } from './pdfText';
 
 export interface MonthlyInventoryRoom {
   name: string;
@@ -13,6 +14,8 @@ const count = (value: string) => {
 export async function downloadMonthlyInventoryPdf(month: string, rooms: MonthlyInventoryRoom[], snapshotDate = new Date()) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('Choose a valid month.');
   const [{ jsPDF }, { autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')]);
+  const khmer = typeof localStorage !== 'undefined' && localStorage.getItem('quickStock_language') === 'km';
+  if (khmer) await loadKhmerPdfFont();
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -29,7 +32,7 @@ export async function downloadMonthlyInventoryPdf(month: string, rooms: MonthlyI
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(19);
-  doc.text('MONTHLY INVENTORY', margin, 19);
+  if (khmer) pdfText(doc, 'បញ្ជីស្តុកប្រចាំខែ', margin, 19, 135, 17, '#ffffff'); else doc.text('MONTHLY INVENTORY', margin, 19);
   doc.setFontSize(12);
   doc.text(monthLabel, margin, 28);
   doc.setFont('helvetica', 'normal');
@@ -38,10 +41,10 @@ export async function downloadMonthlyInventoryPdf(month: string, rooms: MonthlyI
   doc.text(`Snapshot: ${snapshotLabel}`, pageWidth - margin, 27, { align: 'right' });
   doc.setTextColor(30, 52, 83);
   doc.setFontSize(10);
-  doc.text(`${sortedRooms.length} rooms    ${itemRows} item rows    ${units} units recorded`, margin, 49);
+  pdfText(doc, khmer ? `${sortedRooms.length} បន្ទប់    ${itemRows} ជួរទំនិញ    ${units} គ្រឿង` : `${sortedRooms.length} rooms    ${itemRows} item rows    ${units} units recorded`, margin, 49, 210, 10);
   doc.setFontSize(8);
   doc.setTextColor(94, 111, 133);
-  doc.text('Quantities come from the current Sheet. Fill in Counted and Notes during the monthly check.', margin, 55);
+  pdfText(doc, khmer ? 'ចំនួនយកពីសន្លឹកបច្ចុប្បន្ន។ បំពេញចំនួនរាប់បាន និងកំណត់ចំណាំពេលពិនិត្យប្រចាំខែ។' : 'Quantities come from the current Sheet. Fill in Counted and Notes during the monthly check.', margin, 55, 250, 8);
   let nextY = 64;
 
   for (const room of sortedRooms) {
@@ -56,7 +59,7 @@ export async function downloadMonthlyInventoryPdf(month: string, rooms: MonthlyI
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
     doc.setTextColor(25, 66, 120);
-    doc.text(room.name, margin + 3, nextY + 1.5);
+    pdfText(doc, room.name, margin + 3, nextY + 1.5, 150, 10);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.text(`${activeItems.length} rows  /  ${roomUnits} units`, pageWidth - margin - 3, nextY + 1.5, { align: 'right' });
@@ -66,7 +69,7 @@ export async function downloadMonthlyInventoryPdf(month: string, rooms: MonthlyI
       startY: nextY,
       margin: { left: margin, right: margin, top: 18, bottom: 18 },
       theme: 'grid',
-      head: [['#', 'Item name', 'Type / model', 'Hostname / serial', 'Sheet qty', 'Counted', 'Notes / difference']],
+      head: [khmer ? ['#', 'ឈ្មោះទំនិញ', 'ប្រភេទ / ម៉ូដែល', 'ឈ្មោះ / លេខសម្គាល់', 'ចំនួនសន្លឹក', 'រាប់បាន', 'កំណត់ចំណាំ'] : ['#', 'Item name', 'Type / model', 'Hostname / serial', 'Sheet qty', 'Counted', 'Notes / difference']],
       body: activeItems.length
         ? activeItems.map((item, index) => [
             String(index + 1), item.item, item.type || item.tag || '',
@@ -82,6 +85,8 @@ export async function downloadMonthlyInventoryPdf(month: string, rooms: MonthlyI
         5: { cellWidth: 21 }, 6: { cellWidth: 69 },
       },
       rowPageBreak: 'avoid',
+      didParseCell: hook => { if (typeof hook.cell.raw === 'string' && /[\u1780-\u17ff]/.test(hook.cell.raw)) hook.cell.text = ['']; },
+      didDrawCell: hook => { if (typeof hook.cell.raw === 'string' && /[\u1780-\u17ff]/.test(hook.cell.raw)) pdfText(doc, hook.cell.raw, hook.cell.x + 2, hook.cell.y + hook.cell.height / 2 + 2, hook.cell.width - 4, 7, hook.section === 'head' ? '#ffffff' : '#233b4f'); },
       didDrawPage: ({ pageNumber }) => {
         if (pageNumber > 1) {
           doc.setFont('helvetica', 'bold');
@@ -103,9 +108,9 @@ export async function downloadMonthlyInventoryPdf(month: string, rooms: MonthlyI
   doc.line(margin, nextY, pageWidth - margin, nextY);
   doc.setFontSize(9);
   doc.setTextColor(47, 72, 104);
-  doc.text('Checked by: ____________________________________', margin, nextY + 9);
-  doc.text('Date: ____________________', margin + 103, nextY + 9);
-  doc.text('Approved by: ______________________________', margin + 168, nextY + 9);
+  pdfText(doc, khmer ? 'ពិនិត្យដោយ៖ ______________________' : 'Checked by: ____________________________________', margin, nextY + 9, 96, 9);
+  pdfText(doc, khmer ? 'កាលបរិច្ឆេទ៖ ____________' : 'Date: ____________________', margin + 103, nextY + 9, 58, 9);
+  pdfText(doc, khmer ? 'អនុម័តដោយ៖ ____________________' : 'Approved by: ______________________________', margin + 168, nextY + 9, 100, 9);
 
   const pages = doc.getNumberOfPages();
   for (let page = 1; page <= pages; page++) {
@@ -113,7 +118,7 @@ export async function downloadMonthlyInventoryPdf(month: string, rooms: MonthlyI
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(105, 121, 141);
-    doc.text('Live stock snapshot. This PDF does not contain historical month-end balances.', margin, pageHeight - 8);
+    pdfText(doc, khmer ? 'ទិន្នន័យស្តុកបច្ចុប្បន្ន។ PDF នេះមិនមានសមតុល្យចុងខែពីមុនទេ។' : 'Live stock snapshot. This PDF does not contain historical month-end balances.', margin, pageHeight - 8, 240, 7);
     doc.text(`${page} / ${pages}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
   }
   doc.save(`quick-stock-monthly-inventory-${month}.pdf`);

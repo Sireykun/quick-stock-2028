@@ -1,321 +1,56 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  RotateCcw, Download, Upload, Database, RefreshCw, FilePlus2, 
-  CheckCircle2, AlertTriangle, ShieldCheck, History
-} from 'lucide-react';
-import { createStarterSheets, formatClassColors, formatStockColors } from '../lib/sheets';
-
-export interface RestoreSnapshot {
-  id: string;
-  timestamp: string;
-  name: string;
-  classesSheetId: string;
-  stockGroups: string[];
-  itemCount: number;
-}
-
-const INITIAL_SNAPSHOTS: RestoreSnapshot[] = [
-  {
-    id: 'snap-101',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toLocaleString(),
-    name: 'Automatic Sync Snapshot',
-    classesSheetId: localStorage.getItem('quickStock_classesSheetId') || 'demo_admin_spreadsheet_id',
-    stockGroups: ['Stock Room'],
-    itemCount: 45
-  },
-  {
-    id: 'snap-102',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toLocaleString(),
-    name: 'Daily Pre-Audit Snapshot',
-    classesSheetId: localStorage.getItem('quickStock_classesSheetId') || 'demo_admin_spreadsheet_id',
-    stockGroups: ['Stock Room', 'IT Storage B'],
-    itemCount: 42
-  }
-];
+import { useEffect, useState } from 'react';
+import { captureBackup, listBackups, previewBackup, restoreBackup, saveBackup, type SheetBackup } from '../lib/backups';
+import { useLanguage } from '../components/LanguageProvider';
+import { useAuth } from '../components/AuthProvider';
 
 export function DataRestore() {
-  const [snapshots, setSnapshots] = useState<RestoreSnapshot[]>(() => {
-    const saved = localStorage.getItem('quickStock_snapshots');
-    return saved ? JSON.parse(saved) : INITIAL_SNAPSHOTS;
-  });
-
-  const [status, setStatus] = useState<'idle' | 'restoring' | 'success' | 'error'>('idle');
-  const [statusMsg, setStatusMsg] = useState('');
-
-  useEffect(() => {
-    localStorage.setItem('quickStock_snapshots', JSON.stringify(snapshots));
-  }, [snapshots]);
-
-  // Export full system backup JSON
-  const handleExportBackup = () => {
-    const backupData = {
-      version: '1.0',
-      exportedAt: new Date().toISOString(),
-      classesSheetId: localStorage.getItem('quickStock_classesSheetId') || '',
-      stockGroups: JSON.parse(localStorage.getItem('quickStock_stockGroups') || '[]'),
-      defaultItems: JSON.parse(localStorage.getItem('quickStock_defaultItems') || '[]'),
-      labDefaultItems: JSON.parse(localStorage.getItem('quickStock_labDefaultItems') || '[]'),
-      itemMaster: JSON.parse(localStorage.getItem('quickStock_itemMaster') || '[]'),
-      typesMaster: JSON.parse(localStorage.getItem('quickStock_typesMaster') || '[]'),
-    };
-
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `quickstock_backup_${Date.now()}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+  const { t } = useLanguage();
+  const { role } = useAuth();
+  const sheetId = localStorage.getItem('quickStock_classesSheetId') || '';
+  const [backups, setBackups] = useState<SheetBackup[]>([]);
+  const [selected, setSelected] = useState<SheetBackup | null>(null);
+  const [preview, setPreview] = useState<{ title: string; before: number; after: number }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  useEffect(() => { if (!sheetId) { setMessage(t('Connect your Google Sheet in Settings first.')); return; } listBackups(sheetId).then(setBackups).catch(error => setMessage(error.message)); }, [sheetId]);
+  const create = async () => {
+    setBusy(true); setMessage('');
+    try { await captureBackup(sheetId, 'manual'); setBackups(await listBackups(sheetId)); setMessage(t('Snapshot saved on this device.')); }
+    catch (error) { setMessage(t((error as Error).message)); }
+    finally { setBusy(false); }
   };
-
-  // Create manual snapshot
-  const handleCreateSnapshot = () => {
-    const newSnap: RestoreSnapshot = {
-      id: `snap-${Date.now()}`,
-      timestamp: new Date().toLocaleString(),
-      name: `Manual Backup Snapshot`,
-      classesSheetId: localStorage.getItem('quickStock_classesSheetId') || '',
-      stockGroups: JSON.parse(localStorage.getItem('quickStock_stockGroups') || '[]'),
-      itemCount: 50
-    };
-    setSnapshots([newSnap, ...snapshots]);
-    setStatus('success');
-    setStatusMsg('New system restore snapshot created!');
-    setTimeout(() => setStatus('idle'), 3000);
+  const choose = async (backup: SheetBackup) => {
+    setBusy(true); setMessage('');
+    try { setPreview(await previewBackup(backup)); setSelected(backup); }
+    catch (error) { setMessage(t((error as Error).message)); }
+    finally { setBusy(false); }
   };
-
-  // Restore from snapshot
-  const handleRestoreSnapshot = (snap: RestoreSnapshot) => {
-    if (window.confirm(`Restore system state to "${snap.name}" from ${snap.timestamp}?`)) {
-      setStatus('restoring');
-      try {
-        if (snap.classesSheetId) {
-          localStorage.setItem('quickStock_classesSheetId', snap.classesSheetId);
-        }
-        if (snap.stockGroups) {
-          localStorage.setItem('quickStock_stockGroups', JSON.stringify(snap.stockGroups));
-          window.dispatchEvent(new CustomEvent('stockGroupsUpdated', { detail: snap.stockGroups }));
-        }
-        setStatus('success');
-        setStatusMsg(`Successfully restored data from snapshot: ${snap.name}`);
-        setTimeout(() => setStatus('idle'), 3500);
-      } catch (err: any) {
-        setStatus('error');
-        setStatusMsg(err.message || 'Failed to restore snapshot.');
-      }
-    }
+  const restore = async () => {
+    if (!selected || role === 'viewer') return;
+    setBusy(true); setMessage('');
+    try { await captureBackup(sheetId, 'manual'); await restoreBackup(selected); setBackups(await listBackups(sheetId)); setSelected(null); setMessage(t('Sheet restored. A safety backup of the previous data was saved first.')); }
+    catch (error) { setMessage(t((error as Error).message)); }
+    finally { setBusy(false); }
   };
-
-  // Restore from uploaded JSON file
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const download = (backup: SheetBackup) => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: 'application/json' }));
+    const link = document.createElement('a'); link.href = url; link.download = `quickstock-${backup.createdAt.slice(0, 10)}.json`; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const upload = async (file?: File) => {
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const parsed = JSON.parse(event.target?.result as string);
-        if (parsed.classesSheetId) {
-          localStorage.setItem('quickStock_classesSheetId', parsed.classesSheetId);
-        }
-        if (parsed.stockGroups) {
-          localStorage.setItem('quickStock_stockGroups', JSON.stringify(parsed.stockGroups));
-          window.dispatchEvent(new CustomEvent('stockGroupsUpdated', { detail: parsed.stockGroups }));
-        }
-        if (parsed.defaultItems) {
-          localStorage.setItem('quickStock_defaultItems', JSON.stringify(parsed.defaultItems));
-        }
-        if (parsed.labDefaultItems) {
-          localStorage.setItem('quickStock_labDefaultItems', JSON.stringify(parsed.labDefaultItems));
-        }
-        setStatus('success');
-        setStatusMsg('System restored successfully from JSON backup file!');
-        setTimeout(() => setStatus('idle'), 4000);
-      } catch (err: any) {
-        setStatus('error');
-        setStatusMsg('Invalid backup file format.');
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  // Re-initialize fresh starter sheets
-  const handleRecreateSheets = async () => {
-    if (!window.confirm('Create a fresh set of Google Starter Sheets? Your local settings will be linked to the new sheets.')) {
-      return;
-    }
-    setStatus('restoring');
     try {
-      const { stockSheetId: newStockId, classesSheetId: newClassesId } = await createStarterSheets();
-      await formatStockColors(newStockId, 0, 'Stock Room');
-      await formatClassColors(newClassesId, 0, 'Classes');
-      localStorage.setItem('quickStock_classesSheetId', newClassesId);
-
-      setStatus('success');
-      setStatusMsg('New Google Sheets created and formatted successfully!');
-      setTimeout(() => setStatus('idle'), 4000);
-    } catch (err: any) {
-      setStatus('error');
-      setStatusMsg(err.message || 'Failed to create new starter sheets.');
-    }
+      const data = JSON.parse(await file.text()) as SheetBackup;
+      if (data.sheetId !== sheetId || !Array.isArray(data.tabs) || !data.tabs.every(tab => typeof tab.title === 'string' && Array.isArray(tab.values))) throw new Error(t('Backup file does not match this Sheet.'));
+      await saveBackup({ ...data, id: crypto.randomUUID(), kind: 'manual' });
+      setBackups(await listBackups(sheetId)); setMessage(t('Backup imported. Preview it before restoring.'));
+    } catch (error) { setMessage(t((error as Error).message)); }
   };
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 dark:bg-indigo-400/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
-              <RotateCcw className="w-5 h-5" />
-            </div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Data Backup & Restore</h1>
-          </div>
-          <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Backup system data, restore snapshots, import JSON backups, or reset starter sheets.</p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleExportBackup}
-            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm transition-colors flex items-center gap-2 shadow-sm"
-          >
-            <Download className="w-4 h-4" />
-            Download Backup JSON
-          </button>
-        </div>
-      </div>
-
-      {/* Notifications */}
-      {status === 'success' && (
-        <div className="p-4 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-2xl font-semibold text-sm flex items-center gap-3">
-          <CheckCircle2 className="w-5 h-5 shrink-0" />
-          <p>{statusMsg}</p>
-        </div>
-      )}
-
-      {status === 'error' && (
-        <div className="p-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-400 rounded-2xl font-semibold text-sm flex items-center gap-3">
-          <AlertTriangle className="w-5 h-5 shrink-0" />
-          <p>{statusMsg}</p>
-        </div>
-      )}
-
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Upload Backup File Card */}
-        <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl p-6 rounded-[32px] border border-white/60 dark:border-white/10 shadow-sm space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
-              <Upload className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Restore from Backup File</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Import a previously saved `.json` backup file.</p>
-            </div>
-          </div>
-
-          <label className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500 dark:hover:border-indigo-400 transition-colors bg-slate-50/50 dark:bg-slate-800/40">
-            <Upload className="w-8 h-8 text-slate-400 mb-2" />
-            <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Click to upload JSON backup file</span>
-            <span className="text-xs text-slate-400 mt-1">Supports Quick Stock v1.0 backup standard</span>
-            <input 
-              type="file" 
-              accept=".json"
-              onChange={handleFileUpload}
-              className="hidden" 
-            />
-          </label>
-        </div>
-
-        {/* Emergency Sheet Generator Card */}
-        <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl p-6 rounded-[32px] border border-white/60 dark:border-white/10 shadow-sm space-y-4 flex flex-col justify-between">
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
-                <FilePlus2 className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Generate Starter Sheets</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Re-create missing or deleted Google Starter Sheets.</p>
-              </div>
-            </div>
-            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              If your linked spreadsheet was deleted or unlinked, click below to generate a new starter spreadsheet with all required headers (Classes, Stock Room, Item Master, Lab Templates).
-            </p>
-          </div>
-
-          <button
-            onClick={handleRecreateSheets}
-            disabled={status === 'restoring'}
-            className="w-full py-3 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 border border-emerald-200 dark:border-emerald-500/30 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2"
-          >
-            {status === 'restoring' ? (
-              <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              <FilePlus2 className="w-4 h-4" />
-            )}
-            Re-Create Starter Sheets
-          </button>
-        </div>
-      </div>
-
-      {/* Snapshots Table */}
-      <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl p-6 rounded-[32px] border border-white/60 dark:border-white/10 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <History className="w-5 h-5 text-indigo-500" />
-              Automatic System Restore Snapshots
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Quick 1-click restore to recent system states.</p>
-          </div>
-
-          <button
-            onClick={handleCreateSnapshot}
-            className="px-4 py-2 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 border border-indigo-200 dark:border-indigo-500/20 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
-          >
-            <Database className="w-3.5 h-3.5" />
-            Create Snapshot Now
-          </button>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr className="bg-slate-50/50 dark:bg-slate-800/30 text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
-                <th className="py-3 px-4 font-semibold">Snapshot Name</th>
-                <th className="py-3 px-4 font-semibold">Created At</th>
-                <th className="py-3 px-4 font-semibold">Items</th>
-                <th className="py-3 px-4 font-semibold text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
-              {snapshots.map((snap) => (
-                <tr key={snap.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                  <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                    {snap.name}
-                  </td>
-                  <td className="py-3.5 px-4 text-xs font-mono text-slate-500 dark:text-slate-400">
-                    {snap.timestamp}
-                  </td>
-                  <td className="py-3.5 px-4 font-medium text-slate-700 dark:text-slate-300 text-xs">
-                    {snap.itemCount} Items
-                  </td>
-                  <td className="py-3.5 px-4 text-right">
-                    <button
-                      onClick={() => handleRestoreSnapshot(snap)}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors inline-flex items-center gap-1"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      Restore
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
+  return <main className="inventory-page space-y-5">
+    <header><h1 className="text-3xl font-bold">{t('Data Backup & Restore')}</h1><p className="text-sm text-slate-600 dark:text-slate-300">{t('A daily backup is captured when an authorized user opens the app. Backups stay in this browser; download copies for safe storage.')}</p></header>
+    <div className="flex flex-wrap gap-2"><button type="button" disabled={busy || role === 'viewer'} onClick={create} className="rounded-xl bg-sky-700 px-4 py-3 font-bold text-white disabled:opacity-50">{t('Create snapshot now')}</button><label className="cursor-pointer rounded-xl border border-sky-400 px-4 py-3 font-bold">{t('Import backup JSON')}<input className="sr-only" type="file" accept="application/json,.json" onChange={event => upload(event.target.files?.[0])} /></label></div>
+    {message && <p role="status" className="rounded-xl bg-sky-50 p-3 text-sm text-sky-900 dark:bg-slate-800 dark:text-sky-100">{message}</p>}
+    <section className="nova-panel rounded-2xl p-4"><h2 className="text-lg font-bold">{t('Snapshots')}</h2>{backups.length === 0 && <p className="mt-2 text-sm">{t('No real backup has been captured yet.')}</p>}<ul className="mt-3 space-y-2">{backups.map(backup => <li key={backup.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-300 p-3 dark:border-slate-600"><div className="min-w-0 flex-1"><strong>{new Date(backup.createdAt).toLocaleString()}</strong><p className="text-xs">{t(backup.kind === 'automatic' ? 'Automatic' : 'Manual')} · {backup.tabs.length} {t('tabs')} · {backup.tabs.reduce((sum, tab) => sum + Math.max(0, tab.values.length - 1), 0)} {t('rows')}</p></div><button type="button" onClick={() => choose(backup)} className="rounded-lg bg-sky-700 px-3 py-2 text-sm font-bold text-white">{t('Preview restore')}</button><button type="button" onClick={() => download(backup)} className="rounded-lg border border-slate-400 px-3 py-2 text-sm">{t('Download')}</button></li>)}</ul></section>
+    {selected && <section className="nova-panel rounded-2xl p-4"><h2 className="text-lg font-bold">{t('Restore preview')} · {new Date(selected.createdAt).toLocaleString()}</h2><p className="text-sm">{t('Current rows → backup rows. This replaces data in the listed tabs.')}</p><ul className="my-3 space-y-1">{preview.map(tab => <li key={tab.title}>{tab.title}: {tab.before} → {tab.after}</li>)}</ul><div className="flex gap-2"><button type="button" onClick={restore} disabled={busy || role === 'viewer'} className="rounded-xl bg-rose-700 px-4 py-3 font-bold text-white disabled:opacity-50">{t('Restore this backup')}</button><button type="button" onClick={() => setSelected(null)} className="rounded-xl border border-slate-400 px-4 py-3">{t('Cancel')}</button></div></section>}
+  </main>;
 }

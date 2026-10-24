@@ -1,6 +1,6 @@
 import { FluidSpinner } from "./FluidSpinner";
 import { SearchableSelect } from "./SearchableSelect";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   getSpreadsheetMetadata,
@@ -63,6 +63,9 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { cn, getItemIcon } from "../lib/utils";
 import { BarcodeScanner } from "./BarcodeScanner";
+import { useLanguage } from "./LanguageProvider";
+import { findDuplicateMatches, loadLocatedAssets } from "../lib/duplicateAssets";
+import { groupStockItems, stockModelChoices } from "../lib/stockGroups";
 import {
   PieChart,
   Pie,
@@ -332,10 +335,12 @@ export function InventoryList({
   subtitle,
   type,
 }: InventoryListProps) {
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<SheetRow[]>([]);
+  const savedIdentifiers = useRef(new Map<number, { snid: string; hostname: string }>());
   const [actualTabName, setActualTabName] = useState<string>("");
   const [actualSheetNumericalId, setActualSheetNumericalId] = useState<
     number | null
@@ -350,8 +355,17 @@ export function InventoryList({
   const [itemToDelete, setItemToDelete] = useState<number | null>(null);
   const [scannerOpenIdx, setScannerOpenIdx] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedStockItemRow, setSelectedStockItemRow] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<"sheet" | "name" | "quantity-low" | "quantity-high">("sheet");
+  const [showLowStockOnly, setShowLowStockOnly] = useState(false);
+  const [isPhone, setIsPhone] = useState(() => window.matchMedia('(max-width: 700px)').matches);
+  const [visibleLimit, setVisibleLimit] = useState(30);
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [selectedStockGroupKey, setSelectedStockGroupKey] = useState<string | null>(null);
+  const [newGroupModel, setNewGroupModel] = useState('');
+  const [isNewGroupModel, setIsNewGroupModel] = useState(false);
+  const [newGroupQuantity, setNewGroupQuantity] = useState('1');
   const navigate = useNavigate();
+  useEffect(() => { const query = window.matchMedia('(max-width: 700px)'); const update = () => setIsPhone(query.matches); query.addEventListener('change', update); return () => query.removeEventListener('change', update); }, []);
 
   const [modifiedRows, setModifiedRows] = useState<Set<number>>(new Set());
 
@@ -471,6 +485,7 @@ export function InventoryList({
       await Promise.all(promises);
 
       setItems(data);
+      savedIdentifiers.current = new Map(data.map(item => [item.row, { snid: item.snid || '', hostname: item.hostname || '' }]));
 
       setModifiedRows(new Set());
     } catch (err: any) {
@@ -790,45 +805,73 @@ export function InventoryList({
     setItemToDelete(null);
   };
 
-  const handleSave = async () => {
-    if (modifiedRows.size === 0) return;
+  const confirmDuplicateRows = async (candidates: SheetRow[]): Promise<boolean> => {
+    const candidatesToCheck = candidates.filter(item => {
+      const saved = savedIdentifiers.current.get(item.row);
+      const snid = item.snid?.trim().toLowerCase() || '';
+      const hostname = item.hostname?.trim().toLowerCase() || '';
+      return (snid && snid !== (saved?.snid.trim().toLowerCase() || '')) ||
+        (hostname && hostname !== (saved?.hostname.trim().toLowerCase() || ''));
+    });
+    if (!candidatesToCheck.length) return true;
+    try {
+      const assets = await loadLocatedAssets(sheetId);
+      const conflicts = candidatesToCheck.flatMap(item => {
+        const sourceLocation = `${type === 'stock' ? 'Stock' : 'Class'}: ${item.location || className || title || ''}`;
+        return findDuplicateMatches({ ...item, sourceLocation }, assets).map(match =>
+          `${item.item} — ${match.field} ${match.value}: ${match.matches.map(other => `${other.item} in ${other.sourceLocation}`).join(', ')}`
+        );
+      });
+      return conflicts.length === 0 || window.confirm(`Duplicate asset IDs found:\n\n${conflicts.join('\n')}\n\nSave anyway?`);
+    } catch (err) {
+      console.warn('Could not check duplicate asset IDs', err);
+      return window.confirm('Could not check other locations for duplicate asset IDs. Save anyway?');
+    }
+  };
+
+  const handleSave = async (onlyRows?: number[]) => {
+    if (saving || modifiedRows.size === 0 || (onlyRows && !onlyRows.some(row => modifiedRows.has(row)))) return;
     setSaving(true);
     setError(null);
 
-    const allUpdates = items.filter((item) => modifiedRows.has(item.row));
+    const allUpdates = items.filter((item) => modifiedRows.has(item.row) && (!onlyRows || onlyRows.includes(item.row)));
     const deletes = allUpdates.filter((item) => item._isDeleted);
     const updates = allUpdates.filter((item) => !item._isDeleted);
-
-    // Optimistically update local items state
-    setItems((prev) =>
-      prev.filter((item) => !deletes.some((d) => d.row === item.row)),
-    );
-    setModifiedRows(new Set());
-    setSaving(false);
+    if (!(await confirmDuplicateRows(updates))) {
+      setSaving(false);
+      return;
+    }
 
     try {
-      if (updates.length > 0) {
+      if (updates.length > 0 && deletes.length === 0) {
         await updateClassInventory(sheetId, actualTabName, updates);
       }
 
       if (deletes.length > 0) {
-        if (actualSheetNumericalId !== null) {
-          await deleteClassItems(
-            sheetId,
-            actualSheetNumericalId,
-            actualTabName,
-            deletes.map((d) => d.row),
-            title || "",
-          );
-          formatClassColors(
-            sheetId,
-            actualSheetNumericalId,
-            actualTabName,
-          ).catch(() => {});
-        }
+        if (actualSheetNumericalId === null) throw new Error("Could not identify the sheet tab. Refresh and try again.");
+        await deleteClassItems(
+          sheetId,
+          actualSheetNumericalId,
+          actualTabName,
+          deletes.map((d) => d.row),
+          title || "",
+          updates,
+        );
+        formatClassColors(
+          sheetId,
+          actualSheetNumericalId,
+          actualTabName,
+        ).catch(() => {});
       }
+      setItems((prev) => prev.filter((item) => !deletes.some((d) => d.row === item.row)));
+      for (const item of updates) savedIdentifiers.current.set(item.row, { snid: item.snid || '', hostname: item.hostname || '' });
+      for (const item of deletes) savedIdentifiers.current.delete(item.row);
+      setModifiedRows(current => new Set([...current].filter(row => !allUpdates.some(item => item.row === row))));
+      setLastSavedAt(Date.now());
     } catch (err: any) {
       setError(err.message || "Failed to save updates.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -886,6 +929,11 @@ export function InventoryList({
       lastUpdated: new Date().toLocaleString(),
       status: "",
     };
+
+    if (!(await confirmDuplicateRows([{ ...newItemObj, row: 0 }]))) {
+      setAddingStatus("idle");
+      return;
+    }
 
     // Optimistically add to items state
     setItems((prev) => [...prev, newItemObj]);
@@ -1004,6 +1052,36 @@ export function InventoryList({
     }
   };
 
+  const handleAddGroupModel = async (event: React.FormEvent, group: ReturnType<typeof groupStockItems>[number]) => {
+    event.preventDefault();
+    const model = newGroupModel.trim();
+    const quantity = Number(newGroupQuantity);
+    if (!model || !Number.isInteger(quantity) || quantity < 0 || !sheetId || actualSheetNumericalId === null || addingStatus === 'saving' || saving || modifiedRows.size > 0) return;
+    const location = className || group.rows[0]?.location || '';
+    const category = group.rows[0]?.tag || '';
+    setAddingStatus('saving');
+    setError(null);
+    try {
+      if (location) {
+        const lastRow = await getClassLastRow(sheetId, actualTabName, location);
+        if (lastRow === null) throw new Error('Could not find this stock location. Refresh and try again.');
+        await addItemToClass(sheetId, actualSheetNumericalId, actualTabName, location, group.name, lastRow, String(quantity), category, model, '', '');
+      } else {
+        await appendInventoryItem(sheetId, actualTabName, group.name, String(quantity), category, model, '', '', '', '');
+      }
+      if (isNewGroupModel && category) await handleAddCustomType(category, model);
+      setNewGroupModel('');
+      setIsNewGroupModel(false);
+      setNewGroupQuantity('1');
+      await loadData(false);
+      formatStockColors(sheetId, actualSheetNumericalId, actualTabName).catch(() => {});
+    } catch (err: any) {
+      setError(err.message || `Could not add ${group.name} model.`);
+    } finally {
+      setAddingStatus('idle');
+    }
+  };
+
   const handleDeleteFullClass = async () => {
     if (!sheetId || actualSheetNumericalId === null) return;
     if ((type === "class" || type === "stock") && !className) return;
@@ -1030,8 +1108,9 @@ export function InventoryList({
 
   const filteredItems = items.filter((item) => {
     if (item._isDeleted) return false;
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
+    if (showLowStockOnly && (parseInt(item.quantity, 10) || 0) > lowInventoryThreshold) return false;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
     return (
       item.item?.toLowerCase().includes(q) ||
       item.hostname?.toLowerCase().includes(q) ||
@@ -1039,10 +1118,17 @@ export function InventoryList({
       item.tag?.toLowerCase().includes(q) ||
       item.type?.toLowerCase().includes(q)
     );
+  }).sort((a, b) => {
+    if (sortBy === "quantity-low") return (parseInt(a.quantity, 10) || 0) - (parseInt(b.quantity, 10) || 0) || a.item.localeCompare(b.item);
+    if (sortBy === "quantity-high") return (parseInt(b.quantity, 10) || 0) - (parseInt(a.quantity, 10) || 0) || a.item.localeCompare(b.item);
+    if (sortBy === "name") return a.item.localeCompare(b.item);
+    return 0;
   });
+  const totalVisibleItems = items.filter((item) => !item._isDeleted).length;
 
   const groupedItems = { All: filteredItems };
-  const selectedStockItem = filteredItems.find(item => item.row === selectedStockItemRow) || filteredItems[0];
+  const visibleStockGroups = groupStockItems(filteredItems);
+  const selectedStockGroup = groupStockItems(items).find(group => group.key === selectedStockGroupKey);
 
   const pieData = React.useMemo(() => {
     if (type !== "stock") return [];
@@ -1110,15 +1196,15 @@ export function InventoryList({
       <div
         key={`${item.row}-${idx}`}
         className={cn(
-          "flex flex-col gap-3 py-4 px-2 sm:px-4 transition-colors rounded-xl",
+          "inventory-item-card flex flex-col gap-3 py-4 px-2 sm:px-4 transition-colors rounded-xl",
           item.status === "Checked"
             ? "bg-blue-50/80 dark:bg-blue-900/10 hover:bg-blue-100/60 dark:hover:bg-blue-900/20"
             : "hover:bg-slate-50 dark:hover:bg-slate-700/30",
         )}
       >
-        <div className="flex justify-between items-start">
-          <div className="flex flex-col flex-1 mr-4 space-y-1.5">
-            <div className="flex items-center gap-2">
+        <div className="inventory-item-main flex justify-between items-start">
+          <div className="inventory-item-fields flex flex-col flex-1 mr-4 space-y-1.5">
+            <div className="inventory-item-title flex items-center gap-2">
               {type === "class" && (
                 <button
                   onClick={() => handleStatusToggle(item.row)}
@@ -1138,10 +1224,11 @@ export function InventoryList({
               </div>
               <DebouncedInput
                 type="text"
+                aria-label={`Item name for ${item.item || "unnamed item"}`}
                 value={item.item}
                 onChange={(val) => handleItemNameChange(item.row, val)}
                 className={cn(
-                  "text-sm font-semibold bg-transparent border-none outline-none focus:ring-1 focus:ring-indigo-300 dark:focus:ring-indigo-500 rounded px-1 -ml-1 w-full",
+                  "min-w-0 text-sm font-semibold bg-transparent border-none outline-none focus:ring-1 focus:ring-indigo-300 dark:focus:ring-indigo-500 rounded px-1 -ml-1 w-full",
                   item.status === "Checked"
                     ? "text-blue-900 dark:text-blue-300"
                     : "text-slate-900 dark:text-slate-100",
@@ -1158,8 +1245,15 @@ export function InventoryList({
                   Low
                 </div>
               )}
+              {modifiedRows.has(item.row) && (
+                <span className="shrink-0 rounded-md bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
+                  Unsaved
+                </span>
+              )}
             </div>
+            <div className="inventory-item-summary">{item.type || t('No model')} · {t('Qty')} {item.quantity}{item.status === 'Checked' ? ` · ${t('Checked')}` : ''}</div>
             <>
+              <div className="inventory-item-field"><span className="inventory-item-field-label">Category</span>
               <TagInput
                 value={item.tag || ""}
                 onChange={(val) => handleTagChange(item.row, val)}
@@ -1168,6 +1262,8 @@ export function InventoryList({
                 customTags={customDropdowns.tags}
                 onAddCustom={handleAddCustomTag}
               />
+              </div>
+              <div className="inventory-item-field"><span className="inventory-item-field-label">Type / model</span>
               <TypeInput
                 value={item.type || ""}
                 tagValue={(item.tag || "Other").trim()}
@@ -1181,9 +1277,10 @@ export function InventoryList({
                 }
                 onAddCustom={handleAddCustomType}
               />
+              </div>
             </>
             {item.tag === "Computer" && (
-              <div className="flex flex-col gap-2 w-full max-w-[200px]">
+              <div className="inventory-item-extra flex flex-col gap-2 w-full max-w-[200px]">
                 <DebouncedInput
                   type="text"
                   placeholder="Hostname"
@@ -1221,7 +1318,7 @@ export function InventoryList({
               </div>
             )}
             {(item.tag === "TV" || item.tag === "Interactive") && (
-              <div className="flex flex-col gap-2 w-full max-w-[200px]">
+              <div className="inventory-item-extra flex flex-col gap-2 w-full max-w-[200px]">
                 {(item.tag === "Interactive" ||
                   item.type?.toLowerCase().includes("interactive")) && (
                   <SearchableSelect
@@ -1263,18 +1360,19 @@ export function InventoryList({
               </div>
             )}
           </div>
-          <div className="flex flex-col items-end gap-2 shrink-0">
-            <div className="flex items-center gap-1">
+          <div className="inventory-item-controls flex flex-col items-end gap-2 shrink-0">
+            <div className="inventory-item-tools flex items-center gap-1">
               <button
                 onClick={() => handleDuplicate(item)}
                 disabled={duplicatingRows.has(item.row)}
                 className={cn(
-                  "p-1.5 rounded-lg transition-colors",
+                  "min-h-10 min-w-10 rounded-lg transition-colors flex items-center justify-center",
                   duplicatingRows.has(item.row)
                     ? "opacity-40 cursor-not-allowed text-slate-400"
                     : "text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-500/10",
                 )}
                 title="Duplicate item"
+                aria-label={`Duplicate ${item.item}`}
               >
                 <Copy
                   className={cn(
@@ -1285,32 +1383,37 @@ export function InventoryList({
               </button>
               <button
                 onClick={() => handleOpenMoveModal(item)}
-                className="p-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10 rounded-lg transition-colors"
+                className="min-h-10 min-w-10 flex items-center justify-center text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-500/10 rounded-lg transition-colors"
                 title="Move item to another Class or Stock"
+                aria-label={`Move ${item.item} to another location`}
               >
                 <ArrowRight className="w-4 h-4" />
               </button>
               <button
                 onClick={() => handleDelete(item.row)}
-                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                className="min-h-10 min-w-10 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
                 title="Remove item"
+                aria-label={`Remove ${item.item}`}
               >
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex items-center gap-2 sm:gap-4 mt-1">
+            <div className="inventory-item-quantity flex items-center gap-2 sm:gap-4 mt-1">
               <button
                 onClick={() => {
                   const val = parseInt(item.quantity) || 0;
                   if (val > 0) handleQuantityChange(item.row, String(val - 1));
                 }}
-                className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
+                aria-label={`Decrease quantity of ${item.item}`}
+                disabled={(parseInt(item.quantity, 10) || 0) <= 0}
+                className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 -
               </button>
               <DebouncedInput
                 type="text"
                 inputMode="numeric"
+                aria-label={`Quantity of ${item.item}`}
                 value={item.quantity}
                 onChange={(val) => handleQuantityChange(item.row, val)}
                 className={cn(
@@ -1325,7 +1428,8 @@ export function InventoryList({
                   const val = parseInt(item.quantity) || 0;
                   handleQuantityChange(item.row, String(val + 1));
                 }}
-                className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
+                aria-label={`Increase quantity of ${item.item}`}
+                className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
               >
                 +
               </button>
@@ -1346,7 +1450,7 @@ export function InventoryList({
   }
 
   return (
-    <div className="space-y-6 pb-12 relative">
+    <div className="space-y-6 pb-12 relative" aria-busy={saving}>
       <AnimatePresence>
         {(saving || addingStatus === "saving") && (
           <motion.div
@@ -1428,22 +1532,68 @@ export function InventoryList({
           <p>{error}</p>
         </div>
       )}
+      {!error && modifiedRows.size === 0 && lastSavedAt && <p role="status" className="text-sm font-semibold text-sky-800 dark:text-sky-200">{t('Saved to Google Sheets')}</p>}
+
+      {modifiedRows.size > 0 && (
+        <div role="status" className="inventory-unsaved-banner sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-200 bg-indigo-50/95 px-4 py-3 shadow-lg backdrop-blur-md dark:border-indigo-500/30 dark:bg-slate-900/95">
+          <div className="flex items-center gap-2 text-sm font-semibold text-indigo-900 dark:text-indigo-100">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {modifiedRows.size} unsaved {modifiedRows.size === 1 ? "item" : "items"}
+          </div>
+          <button
+            type="button"
+            onClick={() => handleSave()}
+            disabled={saving}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-60"
+          >
+            <Save className="h-4 w-4" />
+            {saving ? "Saving..." : "Submit to Sheets"}
+          </button>
+        </div>
+      )}
 
       {items.length > 0 && (
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-slate-500" />
-          <input
-            type="text"
-            placeholder="Search items by name, serial number, hostname, or SNID..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-white/60 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
-          />
+        <div className="space-y-2">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-slate-500" />
+            <input
+              type="text"
+              aria-label="Search inventory items"
+              placeholder="Search item, serial number, hostname, tag, or type..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setVisibleLimit(30); setSelectedStockGroupKey(null); }}
+              onKeyDown={(e) => { if (e.key === "Escape") setSearchQuery(""); }}
+              className="w-full pl-12 pr-12 py-3 bg-white/60 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all shadow-sm"
+            />
+            {searchQuery && (
+              <button type="button" onClick={() => setSearchQuery("")} aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-700 dark:hover:text-white">
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <p role="status" className="px-1 text-sm text-slate-500 dark:text-slate-400">
+            {searchQuery.trim() || showLowStockOnly ? `${filteredItems.length} of ${totalVisibleItems} items shown` : `${totalVisibleItems} ${totalVisibleItems === 1 ? "item" : "items"}`}
+          </p>
+          <div className="flex flex-wrap items-center gap-2 px-1">
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300">
+              Sort by
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
+                <option value="sheet">Sheet order</option>
+                <option value="name">Item name</option>
+                <option value="quantity-low">Quantity: low first</option>
+                <option value="quantity-high">Quantity: high first</option>
+              </select>
+            </label>
+            <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              <input type="checkbox" checked={showLowStockOnly} onChange={(e) => setShowLowStockOnly(e.target.checked)} className="h-4 w-4 accent-indigo-600" />
+              Low stock (≤ {lowInventoryThreshold})
+            </label>
+          </div>
         </div>
       )}
 
       {items.length === 0 && !error ? (
-        <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl rounded-[32px] border border-white/60 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.04)] shadow-sm overflow-hidden p-2 sm:p-5">
+        <div inert={saving} className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl rounded-[32px] border border-white/60 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.04)] shadow-sm overflow-hidden p-2 sm:p-5">
           <div className="text-center py-12 border border-slate-200 dark:border-slate-700 border-dashed rounded-xl bg-slate-50 dark:bg-slate-900/50 mb-4">
             <Package className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
             <h3 className="text-slate-700 dark:text-slate-300 font-medium">
@@ -1555,53 +1705,66 @@ export function InventoryList({
           </div>
         </div>
       ) : (
-        <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl rounded-[32px] border border-white/60 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.04)] shadow-sm overflow-hidden p-2 sm:p-5">
+        <div inert={saving} className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl rounded-[32px] border border-white/60 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.04)] shadow-sm overflow-hidden p-2 sm:p-5">
           {filteredItems.length === 0 ? (
             <div className="text-center py-12 border border-slate-200 dark:border-slate-700 border-dashed rounded-xl bg-slate-50 dark:bg-slate-900/50 mb-4">
               <Search className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
               <h3 className="text-slate-700 dark:text-slate-300 font-medium">
-                No items match your search
+                No items match your filters
               </h3>
               <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-                Try a different search term.
+                Try a different search or turn off the low-stock filter.
               </p>
+              <button type="button" onClick={() => { setSearchQuery(""); setShowLowStockOnly(false); }} className="mt-4 rounded-xl bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/20">
+                Clear filters
+              </button>
             </div>
           ) : (
             type === "stock" ? (
               <div>
-                <div className="stock-item-grid" aria-label="Items in stock room">
-                  {filteredItems.map(item => {
-                    const ItemIcon = getItemIcon(item.item || '', item.tag || '', item.type || '');
+                <div className="stock-item-grid" aria-label="Item groups in stock room">
+                  {(isPhone ? visibleStockGroups.slice(0, visibleLimit) : visibleStockGroups).map(group => {
+                    const first = group.rows[0];
+                    const ItemIcon = getItemIcon(group.name, first.tag || '', first.type || '');
+                    const isSelected = selectedStockGroupKey === group.key;
                     return <button
                       type="button"
-                      key={item.row}
-                      className={`stock-item-tile ${selectedStockItem?.row === item.row ? 'stock-item-tile-active' : ''}`}
-                      onClick={() => {
-                        setSelectedStockItemRow(item.row);
-                        requestAnimationFrame(() => document.getElementById('stock-item-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-                      }}
-                      aria-pressed={selectedStockItem?.row === item.row}
+                      key={group.key}
+                      className={`stock-item-tile ${isSelected ? 'stock-item-tile-active' : ''} ${group.totalQuantity <= lowInventoryThreshold ? 'stock-item-tile-low' : ''}`}
+                      onClick={() => { setSelectedStockGroupKey(isSelected ? null : group.key); setIsAddingItem(false); setNewGroupModel(''); setIsNewGroupModel(false); setNewGroupQuantity('1'); }}
+                      aria-expanded={isSelected}
+                      aria-controls={isSelected ? 'stock-item-group-details' : undefined}
+                      aria-label={`${group.name}: ${group.rows.length} ${group.rows.length === 1 ? 'entry' : 'entries'}, ${group.modelCount} ${group.modelCount === 1 ? 'model' : 'models'}, total quantity ${group.totalQuantity}. ${isSelected ? 'Close' : 'View'} items`}
                     >
                       <span className="stock-item-tile-icon"><ItemIcon size={27} strokeWidth={1.5} /></span>
-                      <strong>{item.item}</strong>
-                      <span>{item.tag || 'Uncategorized'}</span>
-                      <b>Qty {item.quantity || '0'}</b>
+                      <strong>{group.name}</strong>
+                      <span>{group.rows.length} {group.rows.length === 1 ? 'entry' : 'entries'} · {group.modelCount} {group.modelCount === 1 ? 'model' : 'models'}</span>
+                      <b>Qty {group.totalQuantity}</b>
                     </button>;
                   })}
                 </div>
-                {selectedStockItem && <div id="stock-item-editor" className="stock-item-editor">
-                  <div className="stock-item-editor-heading"><strong>Edit {selectedStockItem.item}</strong><span>Change details below, then submit to Sheets.</span></div>
-                  {renderItemCard(selectedStockItem, 0)}
-                </div>}
+                {isPhone && visibleStockGroups.length > visibleLimit && <button type="button" onClick={() => setVisibleLimit(limit => limit + 30)} className="mt-3 min-h-12 w-full rounded-xl border border-sky-400 bg-sky-50 font-bold text-sky-900 dark:bg-sky-950 dark:text-sky-100">{t('Show more items')} ({visibleStockGroups.length - visibleLimit} {t('left')})</button>}
+                {selectedStockGroup && <section id="stock-item-group-details" className="stock-item-group-details" aria-label={`${selectedStockGroup.name} models and items`}>
+                  <div className="stock-item-group-heading"><div><span>STOCK ITEM</span><h3>{selectedStockGroup.name}</h3><p>{selectedStockGroup.rows.length} {selectedStockGroup.rows.length === 1 ? 'entry' : 'entries'} · {selectedStockGroup.modelCount} {selectedStockGroup.modelCount === 1 ? 'model' : 'models'} · Qty {selectedStockGroup.totalQuantity}</p></div><button type="button" onClick={() => setSelectedStockGroupKey(null)} aria-label={`Close ${selectedStockGroup.name} details`}><X size={18} /></button></div>
+                  <div className="stock-item-group-rows">{selectedStockGroup.rows.map((item, idx) => renderItemCard(item, idx))}</div>
+                  <button type="button" onClick={() => handleSave(selectedStockGroup.rows.map(item => item.row))} disabled={saving || !selectedStockGroup.rows.some(item => modifiedRows.has(item.row))} className="stock-item-group-save">{saving ? 'Saving…' : `Save ${selectedStockGroup.name} changes to Sheets`}</button>
+                  <form className="stock-item-group-add" onSubmit={event => handleAddGroupModel(event, selectedStockGroup)}>
+                    <strong>Add {selectedStockGroup.name} model</strong>
+                    <p>Item: {selectedStockGroup.name} · Category: {selectedStockGroup.rows[0]?.tag || 'Uncategorized'}{className ? ` · Location: ${className}` : ''}</p>
+                    <div className="stock-item-group-add-fields"><div className="stock-item-group-model"><span>Type / model</span>{isNewGroupModel ? <div className="stock-item-group-custom-model"><input autoFocus aria-label={`New ${selectedStockGroup.name} model`} value={newGroupModel} onChange={event => setNewGroupModel(event.target.value)} maxLength={120} placeholder="New model name" required /><button type="button" onClick={() => { setIsNewGroupModel(false); setNewGroupModel(''); }} aria-label="Choose an existing model" title="Choose existing model"><ChevronDown size={16} /></button></div> : <SearchableSelect aria-label={`${selectedStockGroup.name} model`} value={newGroupModel} onChange={value => { if (value === '__NEW_MODEL__') { setIsNewGroupModel(true); setNewGroupModel(''); } else setNewGroupModel(value); }} className="stock-item-group-model-select" placeholder="Choose type from Types" searchPlaceholder="Search types..." options={[...stockModelChoices(selectedStockGroup, customDropdowns.typesByTag).map(model => ({ value: model, label: model })), { value: '__NEW_MODEL__', label: '+ New model...' }]} />}</div><label>Quantity<input type="number" min="0" step="1" value={newGroupQuantity} onChange={event => setNewGroupQuantity(event.target.value)} required /></label><button type="submit" disabled={addingStatus === 'saving' || saving || modifiedRows.size > 0 || !newGroupModel.trim()}><Plus size={16} />{addingStatus === 'saving' ? 'Adding…' : 'Add model'}</button></div>
+                    {modifiedRows.size > 0 && <p>Save your pending changes before adding another model.</p>}
+                  </form>
+                </section>}
               </div>
             ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-700/50 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white/60 dark:bg-slate-800/60">
-                {filteredItems.map((item, idx) => renderItemCard(item, idx))}
+              <div className="inventory-item-list divide-y divide-slate-100 dark:divide-slate-700/50 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white/60 dark:bg-slate-800/60">
+                {(isPhone ? filteredItems.slice(0, visibleLimit) : filteredItems).map((item, idx) => renderItemCard(item, idx))}
               </div>
             )
           )}
+          {type !== 'stock' && isPhone && filteredItems.length > visibleLimit && <button type="button" onClick={() => setVisibleLimit(limit => limit + 30)} className="mt-3 min-h-12 w-full rounded-xl border border-sky-400 bg-sky-50 font-bold text-sky-900 dark:bg-sky-950 dark:text-sky-100">{t('Show more items')} ({filteredItems.length - visibleLimit} {t('left')})</button>}
 
-          <div className="mt-4 pt-4 border-t border-slate-100 px-2 sm:px-4">
+          {(type !== 'stock' || !selectedStockGroup) && <div className="mt-4 pt-4 border-t border-slate-100 px-2 sm:px-4">
             {!isAddingItem ? (
               <button
                 onClick={() => setIsAddingItem(true)}
@@ -1699,10 +1862,10 @@ export function InventoryList({
                 </button>
               </form>
             )}
-          </div>
+          </div>}
 
-          <button
-            onClick={handleSave}
+          {type !== 'stock' && <button
+            onClick={() => handleSave()}
             disabled={saving || modifiedRows.size === 0}
             className={cn(
               "w-full font-bold py-4 rounded-2xl shadow-lg mt-6 transition-all",
@@ -1722,7 +1885,7 @@ export function InventoryList({
                 {modifiedRows.size > 0 ? `(${modifiedRows.size})` : ""}
               </span>
             )}
-          </button>
+          </button>}
         </div>
       )}
 

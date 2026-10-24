@@ -52,7 +52,18 @@ export async function resolveSheetNumericalId(spreadsheetId: string, preferredNa
     return fallbackId;
   }
 }
-import { getAccessToken, logout } from './auth';
+import { getAccessToken, getFirebaseIdToken, logout } from './auth';
+
+// Background formatting and user saves share this queue so this browser does not
+// contend with its own pending database operation.
+const mutationQueues = new Map<string, Promise<unknown>>();
+async function serializeMutation<T>(key: string, run: () => Promise<T>): Promise<T> {
+  const previous = mutationQueues.get(key) || Promise.resolve();
+  const next = previous.catch(() => {}).then(run);
+  mutationQueues.set(key, next);
+  try { return await next; }
+  finally { if (mutationQueues.get(key) === next) mutationQueues.delete(key); }
+}
 
 export interface SheetMetadata {
   spreadsheetId: string;
@@ -317,6 +328,29 @@ export async function fetchWithRetry(url: string, options: RequestInit = {}, max
     return await getMockOrLocalResponse(url, options);
   }
 
+  // Live mutations run once through the backend. Never retry an ambiguous write or
+  // turn a failed remote change into a local success.
+  if (options.method && options.method !== 'GET') {
+    const firebaseToken = await getFirebaseIdToken();
+    const isSheetMutation = /^https:\/\/sheets\.googleapis\.com\/v4\/spreadsheets\/[a-zA-Z0-9_-]+(?=:|\/)/.test(url);
+    let response: Response;
+    try {
+      response = await serializeMutation(url.match(/spreadsheets\/([^/:?]+)/)?.[1] || url, () => fetch(isSheetMutation ? '/api/sheet-mutation' : url, {
+        method: isSheetMutation ? 'POST' : options.method,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${activeToken}`, 'X-Firebase-Token': firebaseToken || '' },
+        body: isSheetMutation ? JSON.stringify({ url, method: options.method, body: options.body, operationId: crypto.randomUUID() }) : options.body,
+      }));
+    } catch {
+      throw new SheetsApiError('Sheet change could not be confirmed. Refresh before trying again.');
+    }
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data) {
+      if (response.status === 401) logout().catch(() => {});
+      throw new SheetsApiError(data?.error?.message || 'Sheet change could not be confirmed. Refresh before trying again.', response.status);
+    }
+    return data;
+  }
+
   while (attempt < maxRetries) {
     try {
       const headers: Record<string, string> = {
@@ -372,7 +406,7 @@ export async function fetchWithRetry(url: string, options: RequestInit = {}, max
       if (status === 429 || (status >= 500 && status < 600) || !status) {
         attempt++;
         if (attempt >= maxRetries) {
-          return await getMockOrLocalResponse(url, options);
+          throw error;
         }
         const delay = 1000 * Math.pow(2, attempt - 1);
         await new Promise(resolve => setTimeout(resolve, delay));
@@ -427,8 +461,8 @@ export async function getSpreadsheetMetadata(spreadsheetId: string, forceFresh =
   return request;
 }
 
-export async function deleteClassItems(spreadsheetId: string, sheetId: number, sheetName: string, rowsToDelete: number[], className: string): Promise<void> {
-  if (rowsToDelete.length === 0) return;
+export async function deleteClassItems(spreadsheetId: string, sheetId: number, sheetName: string, rowsToDelete: number[], className: string, updates: SheetRow[] = []): Promise<void> {
+  if (rowsToDelete.length === 0 && updates.length === 0) return;
   const actualSheetName = await resolveSheetName(spreadsheetId, sheetName);
   const actualSheetId = await resolveSheetNumericalId(spreadsheetId, actualSheetName, sheetId);
   // Fetch a wider range so we don't miss rows if Column A is sparse
@@ -472,7 +506,15 @@ export async function deleteClassItems(spreadsheetId: string, sheetId: number, s
     }
   }
 
-  const batchUpdateRequests: any[] = [];
+  const now = new Date().toLocaleString();
+  const batchUpdateRequests: any[] = updates.map(update => ({
+    updateCells: {
+      start: { sheetId: actualSheetId, rowIndex: update.row - 1, columnIndex: 1 },
+      rows: [{ values: [update.item, update.quantity, update.tag || '', update.type || '', update.hostname || '', update.snid || '', now, update.status || '']
+        .map(stringValue => ({ userEnteredValue: { stringValue } })) }],
+      fields: 'userEnteredValue',
+    },
+  }));
 
   if (classTitleRow !== -1 && rowsToDeleteSet.has(classTitleRow)) {
     if (migrateTitleToRow !== -1) {
@@ -811,23 +853,15 @@ export async function getInventory(spreadsheetId: string, sheetName: string): Pr
  */
 export async function updateInventory(spreadsheetId: string, sheetName: string, updates: SheetRow[]): Promise<void> {
   if (updates.length === 0) return;
-  await ensureStockSheetMigrated(spreadsheetId, sheetName);
+  // Inventory reads already migrate legacy tabs before an editable row is shown.
+  // A normal save only changes values; reformatting the entire tab here adds
+  // several remote requests without changing the saved item's appearance.
   const actualSheetName = await resolveSheetName(spreadsheetId, sheetName);
 
-  const fullData = await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${actualSheetName}'!A1:I`);
+  const fullData = await fetchWithRetry(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/'${actualSheetName}'!A1:I10`);
   const header = fullData.values?.[0];
   const sampleRows = fullData.values?.slice(1, 10);
   const format = detectSheetFormat(header, sampleRows);
-  let lastDataRow = 0;
-  if (fullData.values) {
-    for (let i = fullData.values.length - 1; i >= 0; i--) {
-      if (fullData.values[i].some((cell) => String(cell).trim() !== '')) {
-        lastDataRow = i + 1;
-        break;
-      }
-    }
-  }
-
   const now = new Date().toLocaleString();
 
   const data = updates.map(update => {
@@ -874,11 +908,6 @@ export async function updateInventory(spreadsheetId: string, sheetName: string, 
     })
   });
 
-  const meta = await getSpreadsheetMetadata(spreadsheetId);
-  const targetSheet = meta.sheets.find(s => s.properties.title.toLowerCase() === actualSheetName.toLowerCase());
-  if (targetSheet) {
-    await formatClassColors(spreadsheetId, targetSheet.properties.sheetId, actualSheetName);
-  }
 }
 
 /**
@@ -1422,7 +1451,7 @@ export async function formatClassColors(spreadsheetId: string, sheetId: number, 
 /**
  * Appends a new class block to the sheet.
  */
-export async function addClassToInventory(spreadsheetId: string, sheetName: string, className: string): Promise<void> {
+export async function addClassToInventory(spreadsheetId: string, sheetName: string, className: string, useTemplate = true): Promise<void> {
   const actualSheetName = await resolveSheetName(spreadsheetId, sheetName);
   
   if (sheetName.toLowerCase().includes('stock')) {
@@ -1449,14 +1478,16 @@ export async function addClassToInventory(spreadsheetId: string, sheetName: stri
     }
   }
 
-  const templateItems = className.toLowerCase().startsWith("lab") ? await getLabTemplate(spreadsheetId) : await getClassTemplate(spreadsheetId);
+  const templateItems = useTemplate ? (className.toLowerCase().startsWith("lab") ? await getLabTemplate(spreadsheetId) : await getClassTemplate(spreadsheetId)) : [];
   const range = `'${actualSheetName}'!A1:I`;
   const encodedRange = encodeURIComponent(range);
   const now = new Date().toLocaleString();
   
   let values: string[][];
   if (format === 'FormatA') {
-    if (templateItems.length === 0) {
+    if (!useTemplate) {
+      values = [[className, '', '', '', '', '', '', now, '']];
+    } else if (templateItems.length === 0) {
       values = [[className, 'New Item', '0', '', '', '', '', now, '']];
     } else {
       values = templateItems.map((item, index) => [
@@ -1473,7 +1504,9 @@ export async function addClassToInventory(spreadsheetId: string, sheetName: stri
     }
   } else {
     // Format B: Col A=Item, Col B=Qty, Col C=Tag, Col D=Type, Col E=Timestamp, Col F=Status, Col G=Hostname, Col H=SNID, Col I=Location
-    if (templateItems.length === 0) {
+    if (!useTemplate) {
+      values = [['', '', '', '', now, '', '', '', className]];
+    } else if (templateItems.length === 0) {
       values = [['New Item', '0', '', '', now, '', '', '', className]];
     } else {
       values = templateItems.map((item) => [
@@ -2160,6 +2193,14 @@ export interface DashboardSummary {
     totalItems: number;
     checkedItems: number;
   };
+  office: {
+    totalItems: number;
+    checkedItems: number;
+  };
+  otherRooms: {
+    totalItems: number;
+    checkedItems: number;
+  };
   items: { name: string, quantity: number, inStock: number, inClasses: number, tag: string, type: string }[];
   tags: { name: string, quantity: number }[];
   missingTemplateAlerts: { room: string, template: 'class' | 'lab', missingItems: string[] }[];
@@ -2178,6 +2219,8 @@ export async function getDashboardSummary(spreadsheetId: string): Promise<Dashbo
   const result: DashboardSummary = {
     classes: { totalItems: 0, checkedItems: 0 },
     stock: { totalItems: 0, checkedItems: 0 },
+    office: { totalItems: 0, checkedItems: 0 },
+    otherRooms: { totalItems: 0, checkedItems: 0 },
     items: [],
     tags: [],
     missingTemplateAlerts: [],
@@ -2221,7 +2264,7 @@ export async function getDashboardSummary(spreadsheetId: string): Promise<Dashbo
   result.templateAlertsError = classTemplateResult.error || labTemplateResult.error;
   const normalizeItem = (value: string) => value.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
   for (const [room, rows] of Object.entries(classesMap)) {
-    if (room === 'Uncategorized') continue;
+    if (room === 'Uncategorized' || room.toLocaleLowerCase() === 'office' || room.startsWith('Room: ') || room.startsWith('Office: ')) continue;
     const isLab = room.trim().toLocaleLowerCase().startsWith('lab');
     const template = isLab ? labTemplateResult : classTemplateResult;
     if (template.error || template.items.length === 0) continue;
@@ -2233,8 +2276,11 @@ export async function getDashboardSummary(spreadsheetId: string): Promise<Dashbo
   }
   result.missingTemplateAlerts.sort((a, b) => b.missingItems.length - a.missingItems.length || a.room.localeCompare(b.room));
 
-  // Fetch Classes
-  for (const [_, rows] of Object.entries(classesMap)) {
+  // The Classes sheet also stores Office departments and custom rooms.
+  for (const [room, rows] of Object.entries(classesMap)) {
+    const bucket = room.toLocaleLowerCase() === 'office' || room.startsWith('Office: ')
+      ? result.office
+      : room.startsWith('Room: ') ? result.otherRooms : result.classes;
     rows.forEach((row) => {
       const itemName = row.item ? row.item.trim() : '';
       if (itemName) {
@@ -2242,13 +2288,13 @@ export async function getDashboardSummary(spreadsheetId: string): Promise<Dashbo
         const tag = row.tag ? row.tag.trim() : 'Uncategorized';
         const type = row.type ? row.type.trim() : '';
 
-        result.classes.totalItems += quantity;
+        bucket.totalItems += quantity;
         const status = row.status ? row.status.trim().toLowerCase() : '';
-        if (status === 'checked' || status === 'ok' || status === 'yes') result.classes.checkedItems += quantity;
+        if (status === 'checked' || status === 'ok' || status === 'yes') bucket.checkedItems += quantity;
 
         const existing = itemMap.get(itemName) || { quantity: 0, inStock: 0, inClasses: 0, tag, type };
         existing.quantity += quantity;
-        existing.inClasses += quantity;
+        if (bucket === result.classes) existing.inClasses += quantity;
         itemMap.set(itemName, existing);
 
         tagMap.set(tag, (tagMap.get(tag) || 0) + quantity);

@@ -1,259 +1,80 @@
-import React, { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Download, History, RefreshCw, Search } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { SearchableSelect } from '../components/SearchableSelect';
-import { 
-  History, Search, Filter, Download, Trash2, Shield, RefreshCw, 
-  CheckCircle2, AlertTriangle, Info, Lock, Package, ArrowRight
-} from 'lucide-react';
+import { getAccessToken } from '../lib/auth';
 
-export interface LogEntry {
+interface ActivityLog {
   id: string;
-  timestamp: string;
-  user: string;
+  created_at: string;
+  actor_name: string;
+  actor_email: string;
   action: string;
-  category: 'Inventory' | 'Security' | 'System' | 'Restore' | 'Admin';
-  level: 'info' | 'warning' | 'security' | 'success';
-  details: string;
+  target: string;
 }
 
-const DEFAULT_LOGS: LogEntry[] = [
-  {
-    id: 'log-101',
-    timestamp: new Date(Date.now() - 1000 * 60 * 12).toLocaleString(),
-    user: 'Administrator',
-    action: 'System Security Audit',
-    category: 'Security',
-    level: 'security',
-    details: 'Verified Google OAuth token scope and local session encryption.'
-  },
-  {
-    id: 'log-102',
-    timestamp: new Date(Date.now() - 1000 * 60 * 45).toLocaleString(),
-    user: 'Administrator',
-    action: 'Inventory Sync',
-    category: 'Inventory',
-    level: 'success',
-    details: 'Synchronized Stock Room & Room 101 spreadsheets with local cache.'
-  },
-  {
-    id: 'log-103',
-    timestamp: new Date(Date.now() - 1000 * 60 * 120).toLocaleString(),
-    user: 'Administrator',
-    action: 'Data Snapshot Created',
-    category: 'Restore',
-    level: 'info',
-    details: 'Created automatic restore snapshot (4 sheets, 185 items total).'
-  },
-  {
-    id: 'log-104',
-    timestamp: new Date(Date.now() - 1000 * 60 * 300).toLocaleString(),
-    user: 'Administrator',
-    action: 'Asset Investigation Triggered',
-    category: 'Admin',
-    level: 'warning',
-    details: 'Flagged 2 items with missing SNIDs in Stock Room Storage B.'
-  },
-  {
-    id: 'log-105',
-    timestamp: new Date(Date.now() - 1000 * 60 * 1440).toLocaleString(),
-    user: 'System',
-    action: 'Admin Login',
-    category: 'Security',
-    level: 'info',
-    details: 'Admin user authenticated successfully.'
-  }
-];
-
 export function ActivityLogs() {
-  const [logs, setLogs] = useState<LogEntry[]>(() => {
-    const saved = localStorage.getItem('quickStock_activityLogs');
-    return saved ? JSON.parse(saved) : DEFAULT_LOGS;
-  });
-
+  const sheetId = localStorage.getItem('quickStock_classesSheetId') || '';
+  const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [selectedLevel, setSelectedLevel] = useState<string>('All');
+  const [selectedEmail, setSelectedEmail] = useState('All');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    localStorage.setItem('quickStock_activityLogs', JSON.stringify(logs));
-  }, [logs]);
-
-  const handleClearLogs = () => {
-    if (window.confirm('Are you sure you want to clear all activity logs?')) {
-      setLogs([]);
+  const loadLogs = useCallback(async () => {
+    const token = getAccessToken();
+    if (!sheetId || !token || token === 'dummy_token_for_email_login') {
+      setError('Connect your Google account and spreadsheet in Settings to view activity logs.');
+      return;
     }
-  };
-
-  const handleExportLogs = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(logs, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `quickstock_activity_logs_${Date.now()}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-  };
-
-  const filteredLogs = logs.filter(log => {
-    const matchesSearch = 
-      log.action.toLowerCase().includes(search.toLowerCase()) ||
-      log.details.toLowerCase().includes(search.toLowerCase()) ||
-      log.user.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = selectedCategory === 'All' || log.category === selectedCategory;
-    const matchesLevel = selectedLevel === 'All' || log.level === selectedLevel;
-    return matchesSearch && matchesCategory && matchesLevel;
-  });
-
-  const getLevelBadge = (level: LogEntry['level']) => {
-    switch (level) {
-      case 'security':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-500/20">
-            <Lock className="w-3 h-3" /> Security
-          </span>
-        );
-      case 'warning':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20">
-            <AlertTriangle className="w-3 h-3" /> Warning
-          </span>
-        );
-      case 'success':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
-            <CheckCircle2 className="w-3 h-3" /> Success
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20">
-            <Info className="w-3 h-3" /> Info
-          </span>
-        );
+    setLoading(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/activity-logs?spreadsheet=${encodeURIComponent(sheetId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error?.message || 'Could not load activity logs.');
+      setLogs(Array.isArray(data.logs) ? data.logs : []);
+    } catch (err: any) {
+      setError(err.message || 'Could not load activity logs.');
+    } finally {
+      setLoading(false);
     }
+  }, [sheetId]);
+
+  useEffect(() => { loadLogs(); }, [loadLogs]);
+
+  const users = useMemo(() => [...new Map<string, string>(logs.map(log => [log.actor_email, log.actor_name])).entries()].sort((a, b) => a[1].localeCompare(b[1])), [logs]);
+  const query = search.trim().toLocaleLowerCase();
+  const filteredLogs = logs.filter(log => (selectedEmail === 'All' || log.actor_email === selectedEmail) &&
+    [log.actor_name, log.actor_email, log.action, log.target].some(value => value.toLocaleLowerCase().includes(query)));
+
+  const exportLogs = () => {
+    const blob = new Blob([JSON.stringify(filteredLogs, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `quick-stock-activity-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 dark:bg-indigo-400/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
-              <History className="w-5 h-5" />
-            </div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Activity Logs</h1>
-          </div>
-          <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Audit trail of system events, security checks, and inventory modifications.</p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleExportLogs}
-            className="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-semibold text-sm transition-colors flex items-center gap-2 shadow-sm"
-          >
-            <Download className="w-4 h-4" />
-            Export Logs
-          </button>
-          <button
-            onClick={handleClearLogs}
-            className="px-4 py-2.5 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/20 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-xl font-semibold text-sm transition-colors flex items-center gap-2"
-          >
-            <Trash2 className="w-4 h-4" />
-            Clear
-          </button>
-        </div>
-      </div>
-
-      {/* Filters & Search */}
-      <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl rounded-[24px] border border-white/60 dark:border-white/10 shadow-sm p-4 flex flex-col md:flex-row gap-4 justify-between items-center">
-        <div className="relative w-full md:w-96">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search logs by action, user, or details..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Category:</span>
-            <SearchableSelect
-              aria-label="Log category"
-              value={selectedCategory}
-              onChange={setSelectedCategory}
-              className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none"
-              options={[{ value: 'All', label: 'All Categories' }, ...['Inventory', 'Security', 'System', 'Restore', 'Admin'].map(value => ({ value, label: value }))]}
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Level:</span>
-            <SearchableSelect
-              aria-label="Log level"
-              value={selectedLevel}
-              onChange={setSelectedLevel}
-              className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none"
-              options={[{ value: 'All', label: 'All Levels' }, { value: 'info', label: 'Info' }, { value: 'success', label: 'Success' }, { value: 'warning', label: 'Warning' }, { value: 'security', label: 'Security' }]}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Logs Table */}
-      <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl rounded-[32px] border border-white/60 dark:border-white/10 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr className="bg-slate-50/50 dark:bg-slate-800/30 text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
-                <th className="py-3.5 px-6 font-semibold">Timestamp</th>
-                <th className="py-3.5 px-4 font-semibold">User</th>
-                <th className="py-3.5 px-6 font-semibold">Action</th>
-                <th className="py-3.5 px-4 font-semibold">Category</th>
-                <th className="py-3.5 px-4 font-semibold">Level</th>
-                <th className="py-3.5 px-6 font-semibold">Details</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
-              {filteredLogs.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500 font-medium">
-                    No activity logs match your filter criteria.
-                  </td>
-                </tr>
-              ) : (
-                filteredLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                    <td className="py-4 px-6 text-xs font-mono font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                      {log.timestamp}
-                    </td>
-                    <td className="py-4 px-4 font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">
-                      {log.user}
-                    </td>
-                    <td className="py-4 px-6 font-bold text-slate-900 dark:text-white">
-                      {log.action}
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                        {log.category}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4">
-                      {getLevelBadge(log.level)}
-                    </td>
-                    <td className="py-4 px-6 text-slate-600 dark:text-slate-300 text-xs">
-                      {log.details}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+  return <div className="space-y-6">
+    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+      <div><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-500/10 text-sky-600"><History className="h-5 w-5" /></span><h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Activity Logs</h1></div><p className="mt-1 font-medium text-slate-500 dark:text-slate-400">Spreadsheet changes by Google account.</p></div>
+      <div className="flex gap-2"><button type="button" onClick={loadLogs} disabled={loading} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Refresh</button><button type="button" onClick={exportLogs} disabled={filteredLogs.length === 0} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"><Download className="h-4 w-4" />Export Logs</button></div>
     </div>
-  );
+    <div className="flex flex-col gap-3 rounded-[24px] border border-white/60 bg-white/70 p-4 shadow-sm dark:border-white/10 dark:bg-slate-900/70 md:flex-row">
+      <div className="relative min-w-0 flex-1"><Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search name, Gmail, action, or sheet..." aria-label="Search activity logs" className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white" /></div>
+      <SearchableSelect aria-label="Filter by Google account" value={selectedEmail} onChange={setSelectedEmail} className="min-w-[200px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm dark:border-slate-700 dark:bg-slate-800" options={[{ value: 'All', label: 'All Google accounts' }, ...users.map(([email, name]) => ({ value: email, label: `${name} · ${email}` }))]} />
+    </div>
+    {error && <p role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">{error} {error.includes('Settings') && <Link to="/settings" className="font-bold underline">Open Settings</Link>}</p>}
+    <div className="overflow-hidden rounded-[24px] border border-white/60 bg-white/70 shadow-sm dark:border-white/10 dark:bg-slate-900/70">
+      <div className="overflow-x-auto"><table className="w-full min-w-[700px] border-collapse text-left text-sm"><thead><tr className="border-b border-slate-100 bg-slate-50/50 text-slate-500 dark:border-slate-800 dark:bg-slate-800/30 dark:text-slate-400"><th className="px-5 py-3.5 font-semibold">When</th><th className="px-5 py-3.5 font-semibold">Google account</th><th className="px-5 py-3.5 font-semibold">Action</th><th className="px-5 py-3.5 font-semibold">Sheet</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">{filteredLogs.map(log => <tr key={log.id} className="hover:bg-sky-50/50 dark:hover:bg-slate-800/30"><td className="whitespace-nowrap px-5 py-4 text-xs text-slate-500 dark:text-slate-400">{new Date(log.created_at).toLocaleString()}</td><td className="px-5 py-4"><strong className="block text-slate-900 dark:text-white">{log.actor_name}</strong><span className="text-xs text-slate-500 dark:text-slate-400">{log.actor_email}</span></td><td className="px-5 py-4 font-semibold text-slate-800 dark:text-slate-200">{log.action}</td><td className="px-5 py-4 text-slate-600 dark:text-slate-300">{log.target}</td></tr>)}</tbody></table></div>
+      {!loading && !error && filteredLogs.length === 0 && <p className="p-8 text-center text-sm text-slate-500">{logs.length ? 'No changes match your filters.' : 'No recorded changes yet. New spreadsheet edits will appear here.'}</p>}
+      {loading && <p className="p-8 text-center text-sm text-slate-500">Loading activity…</p>}
+    </div>
+  </div>;
 }

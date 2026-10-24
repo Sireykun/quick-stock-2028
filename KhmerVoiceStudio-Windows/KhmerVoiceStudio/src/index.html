@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="km">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f8f6f1">
+  <meta name="description" content="បម្លែងអត្ថបទខ្មែរទៅជាសំឡេងនិយាយ ជ្រើសរើសសំឡេងស្រី ឬប្រុស ហើយទាញយកជា MP3។">
+  <title>សំឡេងខ្មែរ — Khmer Voice Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+Khmer:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="top"><div class="brand"><div class="mark" aria-hidden="true">◖</div><span>សំឡេងខ្មែរ</span></div><nav class="studio-nav"><a href="/" aria-current="page">បង្កើតសំឡេង</a><a href="/record">ថតសំឡេងបង្រៀន</a></nav></header>
+    <main>
+      <div class="eyebrow">Text to speech · អត្ថបទទៅជាសំឡេង</div>
+      <h1>សរសេរពាក្យរបស់អ្នក<br><span>ហើយស្តាប់ជាសំឡេង</span></h1>
+      <p class="sub">បញ្ចូលអត្ថបទខ្មែរ ជ្រើសរើសសំឡេង ហើយបង្កើតសំឡេងសម្រាប់ស្តាប់ ឬទាញយកជា MP3។</p>
+      <div class="panel">
+        <section class="editor" aria-label="អត្ថបទ">
+          <div class="label-row"><label class="label" for="text">អត្ថបទរបស់អ្នក</label><span class="hint">KHMER TEXT</span></div>
+          <div class="input-area"><textarea id="text" spellcheck="false" aria-describedby="count" placeholder="វាយ ឬបិទភ្ជាប់អត្ថបទខ្មែរនៅទីនេះ…">សួស្តី! សូមស្វាគមន៍មកកាន់សំឡេងខ្មែរ។ សរសេរអត្ថបទរបស់អ្នក ហើយចុចប៊ូតុងស្តាប់។</textarea></div>
+          <div class="bottom-row"><span class="count" id="count">0 / 1,500 តួអក្សរ</span><button class="text-btn" id="clear" type="button">សម្អាតអត្ថបទ</button></div><div class="samples" aria-label="អត្ថបទគំរូ"><button type="button" class="sample" data-sample="greeting">សាកល្បង៖ ស្វាគមន៍</button><button type="button" class="sample" data-sample="story">រឿងខ្លី</button><button type="button" class="sample" data-sample="numbers">លេខ និងពេលវេលា</button></div>
+        </section>
+        <aside class="side" aria-label="កំណត់សំឡេង">
+          <h2 class="section-title">កំណត់សំឡេង <span class="badge" lang="en">LOCAL · FREE</span></h2>
+          <div class="connection" id="connection" role="status"><strong id="connection-title">កំពុងភ្ជាប់សេវាសំឡេង…</strong><span id="connection-detail">សូមរង់ចាំបន្តិច។</span><button id="retry" type="button" hidden>ព្យាយាមម្តងទៀត</button></div>
+          <div class="field"><label for="voice">សំឡេងខ្មែរ</label><select id="voice" disabled aria-describedby="voice-note"><option value="">កំពុងផ្ទុកសំឡេង…</option></select><p class="voice-note" id="voice-note">Meta MMS · ដំណើរការលើកុំព្យូទ័រអ្នក</p></div>
+          <div class="field"><div class="range-head"><label for="rate">ល្បឿននិយាយ</label><output id="rate-value" for="rate">1.0×</output></div><input id="rate" type="range" min="0.7" max="1.3" step="0.1" value="1" aria-valuetext="1.0×"><div class="range-ends"><span>យឺត · 0.7×</span><span>លឿន · 1.3×</span></div></div>
+          <div class="actions"><button class="primary generate" id="generate" type="button" disabled><span class="icon" aria-hidden="true">▶</span><span id="generate-label">បង្កើតសំឡេង</span></button></div>
+          <button class="cancel" id="cancel" type="button" hidden>បោះបង់ការរង់ចាំ</button>
+          <div class="status" id="status" role="status" aria-live="polite" aria-atomic="true"></div>
+        </aside>
+        <section class="player" aria-label="ស្តាប់ និងទាញយកសំឡេង">
+          <div class="player-info"><strong>សំឡេងរបស់អ្នក</strong><span id="audio-meta" lang="en">MP3 · Local model</span></div>
+          <div class="audio-wrap"><p id="audio-empty" class="audio-empty">សំឡេងនឹងបង្ហាញនៅទីនេះ បន្ទាប់ពីបង្កើតរួច។</p><audio id="audio" controls preload="metadata" aria-label="ស្តាប់ ផ្អាក ឬរំកិលសំឡេង" hidden></audio></div>
+          <a id="download" class="download" aria-disabled="true" tabindex="-1" download="khmer-voice.mp3"><span aria-hidden="true">↓&nbsp;</span> ទាញយក MP3</a>
+        </section>
+      </div>
+      <div class="info"><span class="info-icon" aria-hidden="true">i</span><div class="privacy-note"><b>ដំណើរការលើកុំព្យូទ័ររបស់អ្នក</b>អត្ថបទ និងសំឡេងត្រូវបានដំណើរការនៅក្នុងកុំព្យូទ័ររបស់អ្នក។ ម៉ូដែល Meta MMS នេះសម្រាប់ការប្រើប្រាស់មិនមែនពាណិជ្ជកម្ម។ <a href="/record">ថតសំឡេងរបស់អ្នកសម្រាប់បង្រៀនម៉ូដែល ↗</a></div></div>
+    </main>
+    <footer class="foot"><span>© Khmer Voice Studio</span><span>Made for Khmer words, spoken aloud.</span></footer>
+  </div>
+  <script src="/app.js" defer></script>
+</body>
+</html>

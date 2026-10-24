@@ -5,9 +5,11 @@ import { X, Image as ImageIcon, Camera } from 'lucide-react';
 interface BarcodeScannerProps {
   onResult: (result: string) => void;
   onClose: () => void;
+  title?: string;
+  description?: string;
 }
 
-export function BarcodeScanner({ onResult, onClose }: BarcodeScannerProps) {
+export function BarcodeScanner({ onResult, onClose, title = 'Scan SNID', description = 'Take a picture of the barcode or upload an existing photo to scan the SNID.' }: BarcodeScannerProps) {
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -37,7 +39,7 @@ export function BarcodeScanner({ onResult, onClose }: BarcodeScannerProps) {
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-slate-50/90 backdrop-blur-sm">
       <div className="flex justify-between items-center p-4 bg-white border-b border-slate-200">
-        <h3 className="font-bold text-slate-800 flex items-center gap-2"><Camera className="w-5 h-5"/> Scan SNID</h3>
+        <h3 className="font-bold text-slate-800 flex items-center gap-2"><Camera className="w-5 h-5"/> {title}</h3>
         <button onClick={onClose} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 text-slate-600">
           <X className="w-6 h-6" />
         </button>
@@ -54,7 +56,7 @@ export function BarcodeScanner({ onResult, onClose }: BarcodeScannerProps) {
           
           <h2 className="text-xl font-bold text-slate-800 mb-2">Upload or Take Photo</h2>
           <p className="text-slate-500 mb-8">
-            Take a picture of the barcode or upload an existing photo to scan the SNID.
+            {description}
           </p>
           
           {error && (

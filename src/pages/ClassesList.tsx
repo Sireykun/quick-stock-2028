@@ -1,5 +1,6 @@
 import { FluidSpinner } from "../components/FluidSpinner";
 import React, { useState, useEffect } from "react";
+import { isOfficeOrCustomRoom } from '../lib/rooms';
 import { Link } from "react-router-dom";
 import {
   getSpreadsheetMetadata,
@@ -36,7 +37,7 @@ export function ClassesList() {
   >(() => {
     try {
       const cached = localStorage.getItem(`quickStock_classesCache_${sheetId}`);
-      if (cached) return JSON.parse(cached);
+      if (cached) return JSON.parse(cached).filter((room: { title: string }) => !isOfficeOrCustomRoom(room.title));
     } catch (e) {}
     return [];
   });
@@ -100,7 +101,7 @@ export function ClassesList() {
       );
 
       const classData = await getClasses(sheetId, tabName);
-      setClasses(classData);
+      setClasses(classData.filter(room => !isOfficeOrCustomRoom(room.title)));
       try {
         localStorage.setItem(
           `quickStock_classesCache_${sheetId}`,
@@ -394,18 +395,18 @@ export function ClassesList() {
               <Link
                 key={cls.title}
                 to={`/classes/${encodeURIComponent(cls.title)}`}
-                className="group p-5 rounded-2xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 shadow-sm hover:shadow-md flex items-center justify-between"
+                className="group p-5 rounded-2xl border border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/40 shadow-sm hover:shadow-md flex items-center justify-between"
                 aria-label={`${cls.title}, done`}
               >
                 <div className="flex items-center gap-4 min-w-0">
-                  <div className="p-3 rounded-xl bg-emerald-100 dark:bg-emerald-900/50">
-                    <CheckCheck className="w-6 h-6 text-emerald-700 dark:text-emerald-300" />
+                  <div className="p-3 rounded-xl bg-sky-100 dark:bg-sky-900/50">
+                    <CheckCheck className="w-6 h-6 text-sky-700 dark:text-sky-300" />
                   </div>
-                  <h3 className="font-bold text-emerald-950 dark:text-emerald-100 truncate">{cls.title}</h3>
+                  <h3 className="font-bold text-sky-950 dark:text-sky-100 truncate">{cls.title}</h3>
                 </div>
                 <div className="flex items-center gap-3 shrink-0 pl-2">
-                  <span className="text-xs font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-900/60 px-2.5 py-1 rounded-full">Done</span>
-                  <ChevronRight className="w-5 h-5 text-emerald-700 dark:text-emerald-300" />
+                  <span className="text-xs font-bold text-sky-800 dark:text-sky-200 bg-sky-100 dark:bg-sky-900/60 px-2.5 py-1 rounded-full">Done</span>
+                  <ChevronRight className="w-5 h-5 text-sky-700 dark:text-sky-300" />
                 </div>
               </Link>
             ) : (

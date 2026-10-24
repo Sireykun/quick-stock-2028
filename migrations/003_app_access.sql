@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS app_access (
+  email TEXT PRIMARY KEY COLLATE NOCASE,
+  role TEXT NOT NULL CHECK (role IN ('editor', 'viewer')),
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

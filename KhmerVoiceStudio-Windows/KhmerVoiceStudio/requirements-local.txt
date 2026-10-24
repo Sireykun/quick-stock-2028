@@ -1,0 +1,9 @@
+transformers==4.46.3
+fastapi==0.115.6
+uvicorn==0.34.0
+numpy==1.26.4
+scipy==1.14.1
+uroman==1.3.1
+regex==2024.11.6
+soundfile==0.13.1
+imageio-ffmpeg==0.6.0

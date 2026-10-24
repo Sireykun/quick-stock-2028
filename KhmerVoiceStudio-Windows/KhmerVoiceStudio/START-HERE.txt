@@ -1,0 +1,27 @@
+KHMER VOICE STUDIO — WINDOWS
+
+1. Install Python 3.12 (64-bit), including the Python launcher:
+   https://www.python.org/downloads/windows/
+
+2. Extract the whole ZIP into a folder.
+
+3. Double-click Setup-Windows.bat once.
+   It installs the app and downloads the real Khmer model.
+   No Azure account, API key, or payment card is needed.
+
+4. Double-click Start-Windows.bat.
+   Keep the black console window open while using the app.
+
+5. In the app, choose “ថតសំឡេងបង្រៀន” to record your voice.
+   Read each prompt, stop, listen, and save only the good takes.
+
+Your recordings stay in the recordings folder on your computer.
+If the speech model is missing, run Download-Model.bat and restart.
+You can record training samples even without the speech model.
+
+This package is ready for installation, but actual Khmer model audio
+and the Windows installer could not be tested in the development
+workspace. Training begins after you collect and check your recordings.
+
+The Meta MMS model is licensed for non-commercial use.
+Read README.md and training/README.md for details.
