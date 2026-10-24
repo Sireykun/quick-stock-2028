@@ -1,9 +1,21 @@
 import { FluidSpinner } from "../components/FluidSpinner";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { animate, motion, useReducedMotion } from 'motion/react';
 import { getSpreadsheetMetadata, getLocations, formatStockColors, SheetRow, getInventory, getAllClassesAndItems as getAllLocationsAndItems, addClassToInventory } from '../lib/sheets';
-import { RefreshCw, AlertCircle, Layers, ChevronRight, Plus, X, CheckCheck, Search, Palette, ArrowDownAZ, ArrowUpAZ, ArrowUpDown, FileText, Printer, Copy, Warehouse, Download, CalendarDays } from 'lucide-react';
+import { RefreshCw, AlertCircle, Layers, ChevronRight, ChevronUp, ChevronDown, LayoutGrid, ListFilter, Plus, X, CheckCheck, Search, Palette, ArrowDownAZ, ArrowUpAZ, ArrowUpDown, FileText, Printer, Copy, Warehouse, Download, CalendarDays } from 'lucide-react';
 import { getRoomPhotos } from '../lib/roomPhotos';
+
+function CountUp({ value }: { value: number }) {
+  const reduceMotion = useReducedMotion();
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    if (reduceMotion) { setDisplay(value); return; }
+    const controls = animate(0, value, { duration: 0.9, ease: 'easeOut', onUpdate: latest => setDisplay(Math.round(latest)) });
+    return () => controls.stop();
+  }, [value, reduceMotion]);
+  return <span>{display}</span>;
+}
 
 export function StockRoomList() {
   const [loading, setLoading] = useState(true);
@@ -19,6 +31,10 @@ export function StockRoomList() {
   
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<'default' | 'asc' | 'desc'>('default');
+  const [viewMode, setViewMode] = useState<'focus' | 'grid'>('focus');
+  const [activeLocation, setActiveLocation] = useState(0);
+  const focusDeck = useRef<HTMLDivElement>(null);
+  const reduceMotion = useReducedMotion();
   
   const [showDraftReport, setShowDraftReport] = useState(false);
   const [draftReportData, setDraftReportData] = useState<Record<string, SheetRow[]> | null>(null);
@@ -180,6 +196,36 @@ export function StockRoomList() {
     }
     return 0;
   });
+
+  useEffect(() => {
+    setActiveLocation(0);
+    focusDeck.current?.scrollTo({ top: 0 });
+  }, [searchQuery, sortOrder, locations.length, viewMode]);
+
+  const updateActiveLocation = () => {
+    const deck = focusDeck.current;
+    if (!deck) return;
+    const center = deck.getBoundingClientRect().top + deck.clientHeight / 2;
+    const cards = deck.querySelectorAll<HTMLElement>('[data-stock-focus-card]');
+    let closest = 0;
+    let distance = Infinity;
+    cards.forEach((card, index) => {
+      const rect = card.getBoundingClientRect();
+      const nextDistance = Math.abs(rect.top + rect.height / 2 - center);
+      if (nextDistance < distance) { distance = nextDistance; closest = index; }
+    });
+    setActiveLocation(closest);
+  };
+
+  const focusLocation = (index: number) => {
+    const deck = focusDeck.current;
+    const card = deck?.querySelectorAll<HTMLElement>('[data-stock-focus-card]')[index];
+    if (!deck || !card) return;
+    const deckRect = deck.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    deck.scrollTo({ top: deck.scrollTop + cardRect.top - deckRect.top - (deck.clientHeight - cardRect.height) / 2, behavior: reduceMotion ? 'instant' : 'smooth' });
+    setActiveLocation(index);
+  };
 
   if (loading && locations.length === 0) {
     return (
@@ -354,7 +400,35 @@ export function StockRoomList() {
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Try a different search term.</p>
         </div>
       ) : (
-        <div className="stock-location-grid">
+        <div className="stock-focus-section">
+          <div className="stock-focus-toolbar">
+            <div>
+              <span className="stock-focus-kicker">EXPLORE STOCK ROOM</span>
+              <h2><CountUp value={sortedLocations.length} /> <span>locations</span></h2>
+              <p>Scroll to bring a room into focus, then open it.</p>
+            </div>
+            <div className="stock-focus-view-switch" aria-label="Stock room view">
+              <button type="button" aria-pressed={viewMode === 'focus'} onClick={() => setViewMode('focus')}><ListFilter size={16} /> Focus</button>
+              <button type="button" aria-pressed={viewMode === 'grid'} onClick={() => setViewMode('grid')}><LayoutGrid size={16} /> Grid</button>
+            </div>
+          </div>
+          {viewMode === 'focus' ? <div className="stock-focus-layout">
+            <div className="stock-focus-rail" aria-hidden="true"><span>{String(activeLocation + 1).padStart(2, '0')}</span><div><i style={{ height: `${((activeLocation + 1) / sortedLocations.length) * 100}%` }} /></div><span>{String(sortedLocations.length).padStart(2, '0')}</span></div>
+            <div ref={focusDeck} className="stock-focus-deck" onScroll={updateActiveLocation} tabIndex={0} aria-label="Stock locations. Scroll or use arrow keys to change focused room." onKeyDown={event => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); focusLocation(Math.max(0, Math.min(sortedLocations.length - 1, activeLocation + (event.key === 'ArrowDown' ? 1 : -1)))); } }}>
+              {sortedLocations.map((cls, index) => (
+                <motion.div key={cls.title} data-stock-focus-card className={`stock-focus-card ${index === activeLocation ? 'is-active' : ''}`} initial={reduceMotion ? false : { opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.42, delay: Math.min(index, 5) * 0.055 }}>
+                  <Link to={`/stock-room/${encodeURIComponent(cls.title)}`} aria-label={`Open ${cls.title}${cls.isChecked ? ', done' : ''}`}>
+                    <div className="stock-focus-card-art">
+                      {roomPhotos[cls.title.trim().toLocaleLowerCase()] ? <img src={roomPhotos[cls.title.trim().toLocaleLowerCase()]} alt="" loading="lazy" /> : <Warehouse size={42} strokeWidth={1.35} />}
+                    </div>
+                    <div className="stock-focus-card-copy"><span>LOCATION {String(index + 1).padStart(2, '0')}</span><strong>{cls.title}</strong><small>{cls.isChecked ? 'Inventory checked' : 'Open room and items'}</small></div>
+                    <span className="stock-focus-card-arrow"><ChevronRight size={21} /></span>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+            <div className="stock-focus-controls"><button type="button" onClick={() => focusLocation(Math.max(0, activeLocation - 1))} disabled={activeLocation === 0} aria-label="Previous stock location"><ChevronUp size={20} /></button><button type="button" onClick={() => focusLocation(Math.min(sortedLocations.length - 1, activeLocation + 1))} disabled={activeLocation === sortedLocations.length - 1} aria-label="Next stock location"><ChevronDown size={20} /></button></div>
+          </div> : <div className="stock-location-grid">
           {sortedLocations.map((cls) => (
             <Link
               key={cls.title}
@@ -369,6 +443,7 @@ export function StockRoomList() {
               <span className="stock-location-tile-footer">{cls.isChecked ? <><CheckCheck size={15} /> Done</> : 'Open room'} <ChevronRight size={16} /></span>
             </Link>
           ))}
+          </div>}
         </div>
       )}
 
