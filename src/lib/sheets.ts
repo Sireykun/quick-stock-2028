@@ -2066,7 +2066,11 @@ export async function moveItemToClassOrStock(
 ): Promise<void> {
   const meta = await getSpreadsheetMetadata(spreadsheetId);
   const sourceSheet = meta.sheets.find(s => s.properties.title.toLowerCase() === sourceTabName.toLowerCase());
-  const targetSheet = meta.sheets.find(s => s.properties.title.toLowerCase() === targetTabName.toLowerCase());
+  const targetTab = targetTabName.trim().toLowerCase();
+  const targetSheet = meta.sheets.find(s => s.properties.title.toLowerCase() === targetTab)
+    || (['class', 'classes'].includes(targetTab)
+      ? meta.sheets.find(s => ['class', 'classes'].includes(s.properties.title.toLowerCase()))
+      : undefined);
   if (!sourceSheet || !targetSheet) throw new Error('Source or destination sheet was not found.');
   if (sourceSheet.properties.sheetId === targetSheet.properties.sheetId && sourceClassName.trim().toLowerCase() === targetClassName.trim().toLowerCase()) return;
   const current = (await getClassInventory(spreadsheetId, sourceTabName, sourceClassName)).find(r => r.row === item.row);

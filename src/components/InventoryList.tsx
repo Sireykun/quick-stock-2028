@@ -705,7 +705,7 @@ export function InventoryList({
     try {
       const meta = await getSpreadsheetMetadata(sheetId);
       const classesSheet = meta.sheets.find(
-        (s) => s.properties.title.toLowerCase() === "classes",
+        (s) => ["class", "classes"].includes(s.properties.title.toLowerCase()),
       );
       const classesTab = classesSheet
         ? classesSheet.properties.title
