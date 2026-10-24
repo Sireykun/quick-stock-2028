@@ -17,7 +17,9 @@ function CountUp({ value }: { value: number }) {
   return <span>{display}</span>;
 }
 
-export function StockRoomList() {
+type StockLocation = { title: string; isChecked: boolean };
+
+export function StockRoomList({ previewLocations }: { previewLocations?: StockLocation[] } = {}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [locations, setLocations] = useState<{ title: string, isChecked: boolean }[]>([]);
@@ -51,9 +53,16 @@ export function StockRoomList() {
   const [monthlyPdfLoading, setMonthlyPdfLoading] = useState(false);
   const [monthlyPdfError, setMonthlyPdfError] = useState<string | null>(null);
 
-  const sheetId = localStorage.getItem('quickStock_classesSheetId') || '';
+  const sheetId = previewLocations ? '' : localStorage.getItem('quickStock_classesSheetId') || '';
 
   const loadLocations = async (showLoading = true) => {
+    if (previewLocations) {
+      setLocations(previewLocations);
+      setRoomPhotos({});
+      setError(null);
+      setLoading(false);
+      return;
+    }
     if (!sheetId) {
       setError('Locations Spreadsheet ID is not configured. Please go to Settings.');
       setLoading(false);
@@ -241,7 +250,7 @@ export function StockRoomList() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">Stock locations</h1>
-          <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Tap a square to open a room and its items.</p>
+          <p className="text-slate-500 dark:text-slate-400 font-medium mt-1">Choose a location to open its items.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {sheetId && (
@@ -288,7 +297,7 @@ export function StockRoomList() {
         </div>
       </div>
 
-      <section className="nova-panel p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4" aria-label="Monthly inventory PDF">
+      {!previewLocations && <section className="nova-panel p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4" aria-label="Monthly inventory PDF">
         <div className="flex items-start gap-3">
           <span className="w-11 h-11 shrink-0 rounded-2xl bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 flex items-center justify-center"><FileText className="w-5 h-5" /></span>
           <div>
@@ -309,7 +318,7 @@ export function StockRoomList() {
             {monthlyPdfLoading ? 'Preparing PDF...' : 'Download PDF'}
           </button>
         </div>
-      </section>
+      </section>}
       {monthlyPdfError && <p role="alert" className="text-sm text-red-700 dark:text-red-400">{monthlyPdfError}</p>}
 
       {locations.length > 0 && (

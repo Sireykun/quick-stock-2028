@@ -5,8 +5,13 @@ import { ThemeProvider } from './components/ThemeProvider';
 import { Layout } from './components/Layout';
 import { BrandLoader } from './components/BrandLoader';
 import { LanguageProvider } from './components/LanguageProvider';
+import { LocalStockPreview } from './pages/LocalStockPreview';
 
-if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+const localStockPreview = import.meta.env.DEV && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+if ('serviceWorker' in navigator) window.addEventListener('load', () => {
+  if (localStockPreview) navigator.serviceWorker.getRegistrations().then(registrations => Promise.all(registrations.map(registration => registration.unregister()))).catch(() => {});
+  else navigator.serviceWorker.register('/sw.js').catch(() => {});
+});
 
 const Home = React.lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
 const OnInventory = React.lazy(() => import('./pages/OnInventory').then(m => ({ default: m.OnInventory })));
@@ -39,6 +44,9 @@ const LoadingScreen = () => (
 );
 
 export default function App() {
+  if (localStockPreview) {
+    return <LanguageProvider><ThemeProvider><LocalStockPreview /></ThemeProvider></LanguageProvider>;
+  }
   return (
     <LanguageProvider>
     <ThemeProvider>
