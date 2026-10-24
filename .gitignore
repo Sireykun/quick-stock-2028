@@ -3,6 +3,7 @@ build/
 dist/
 coverage/
 .wrangler-check/
+.wrangler/
 telegram.txt
 *service-account*.json
 *.key.json
