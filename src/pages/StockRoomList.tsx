@@ -1,21 +1,11 @@
 import { FluidSpinner } from "../components/FluidSpinner";
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { animate, motion, useReducedMotion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
+import { CountUp } from '../components/CountUp';
 import { getSpreadsheetMetadata, getLocations, formatStockColors, SheetRow, getInventory, getAllClassesAndItems as getAllLocationsAndItems, addClassToInventory } from '../lib/sheets';
 import { RefreshCw, AlertCircle, Layers, ChevronRight, ChevronUp, ChevronDown, LayoutGrid, ListFilter, Plus, X, CheckCheck, Search, Palette, ArrowDownAZ, ArrowUpAZ, ArrowUpDown, FileText, Printer, Copy, Warehouse, Download, CalendarDays } from 'lucide-react';
 import { getRoomPhotos } from '../lib/roomPhotos';
-
-function CountUp({ value }: { value: number }) {
-  const reduceMotion = useReducedMotion();
-  const [display, setDisplay] = useState(0);
-  useEffect(() => {
-    if (reduceMotion) { setDisplay(value); return; }
-    const controls = animate(0, value, { duration: 0.9, ease: 'easeOut', onUpdate: latest => setDisplay(Math.round(latest)) });
-    return () => controls.stop();
-  }, [value, reduceMotion]);
-  return <span>{display}</span>;
-}
 
 type StockLocation = { title: string; isChecked: boolean };
 

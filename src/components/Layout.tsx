@@ -8,6 +8,7 @@ import { useAuth } from './AuthProvider';
 import { cn } from '../lib/utils';
 import { CUSTOM_ROOM_PREFIX, isOfficeDepartment, roomLabel } from '../lib/rooms';
 import { useLanguage } from './LanguageProvider';
+import { MotionReveals } from './MotionReveals';
 
 export function Layout() {
   const { t } = useLanguage();
@@ -366,6 +367,7 @@ export function Layout() {
 
         <div className="quickstock-main-content p-4 sm:px-6 md:px-8 pb-24 md:pb-12 max-w-[1500px] w-full mx-auto flex-1">
           {role === 'viewer' && <div className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-900 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-100">Viewer access · Inventory changes are disabled for this account.</div>}
+          <MotionReveals />
           <div className="quickstock-page-enter" key={location.pathname}>
             <Outlet />
           </div>

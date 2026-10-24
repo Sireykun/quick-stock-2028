@@ -6,6 +6,7 @@ import { getItemIcon } from '../lib/utils';
 import { HomeClock } from '../components/HomeClockSchedule';
 import { InventoryBot } from '../components/InventoryBot';
 import { useLanguage } from '../components/LanguageProvider';
+import { CountUp } from '../components/CountUp';
 
 export function Home() {
   const { t } = useLanguage();
@@ -89,7 +90,7 @@ export function Home() {
           </div>
         </div>
         <div className="nova-hero-art nova-status-art">
-          <div className="nova-status-top"><div className="nova-status-overview"><Package size={30} strokeWidth={1.5} /><span>{t('INVENTORY STATUS')}</span><strong>{summary ? totalItems : '—'}</strong><span>{t('assets tracked')}</span></div><InventoryBot summary={summary} /></div>
+          <div className="nova-status-top"><div className="nova-status-overview"><Package size={30} strokeWidth={1.5} /><span>{t('INVENTORY STATUS')}</span><strong>{summary ? <CountUp value={totalItems} /> : '—'}</strong><span>{t('assets tracked')}</span></div><InventoryBot summary={summary} /></div>
           <Link to={heroMessage.href} className={`nova-hero-alert ${heroMessage.alert ? 'nova-hero-alert-warning' : ''}`}>
             <span className="nova-hero-alert-icon">{heroMessage.alert ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}</span>
             <span className="nova-hero-alert-copy"><strong>{heroMessage.label}</strong><span>{heroMessage.text}</span></span>
@@ -117,10 +118,10 @@ export function Home() {
       )}
 
       <section className="nova-stats nova-panel" aria-label="Inventory statistics">
-        <div className="nova-stat"><Package size={19} /><strong>{summary ? totalItems : '—'}</strong><span>{t('Total assets')}</span></div>
-        <div className="nova-stat"><Folder size={19} /><strong>{summary?.classes.totalItems ?? '—'}</strong><span>{t('Deployed in classes')}</span></div>
-        <div className="nova-stat"><Box size={19} /><strong>{summary?.stock.totalItems ?? '—'}</strong><span>{t('In stock rooms')}</span></div>
-        <div className="nova-stat"><CheckCircle2 size={19} /><strong>{summary ? `${verifiedPercent}%` : '—'}</strong><span>{t('Assets verified')}</span></div>
+        <div className="nova-stat"><Package size={19} /><strong>{summary ? <CountUp value={totalItems} /> : '—'}</strong><span>{t('Total assets')}</span></div>
+        <div className="nova-stat"><Folder size={19} /><strong>{summary ? <CountUp value={summary.classes.totalItems} /> : '—'}</strong><span>{t('Deployed in classes')}</span></div>
+        <div className="nova-stat"><Box size={19} /><strong>{summary ? <CountUp value={summary.stock.totalItems} /> : '—'}</strong><span>{t('In stock rooms')}</span></div>
+        <div className="nova-stat"><CheckCircle2 size={19} /><strong>{summary ? <CountUp value={verifiedPercent} suffix="%" /> : '—'}</strong><span>{t('Assets verified')}</span></div>
         <div className="nova-stats-note">Know what you have.<br />Find what you need.<br /><span>— Quick Stock</span></div>
       </section>
 
