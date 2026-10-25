@@ -2,7 +2,7 @@ import { FluidSpinner } from "../components/FluidSpinner";
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getSpreadsheetMetadata, getLocations, formatStockColors, SheetRow, getInventory, getAllClassesAndItems as getAllLocationsAndItems, addClassToInventory } from '../lib/sheets';
-import { RefreshCw, AlertCircle, Layers, ChevronRight, Plus, X, CheckCheck, Search, Palette, ArrowDownAZ, ArrowUpAZ, ArrowUpDown, FileText, Printer, Copy, Warehouse, Download, CalendarDays } from 'lucide-react';
+import { RefreshCw, AlertCircle, Layers, ChevronRight, Plus, X, CheckCheck, Search, ArrowDownAZ, ArrowUpAZ, ArrowUpDown, FileText, Printer, Copy, Warehouse, Download, CalendarDays } from 'lucide-react';
 import { getRoomPhotos } from '../lib/roomPhotos';
 
 export function StockRoomList() {
@@ -15,7 +15,6 @@ export function StockRoomList() {
   const [addingStatus, setAddingStatus] = useState<'idle' | 'saving' | 'error'>('idle');
   const [mainTabName, setMainTabName] = useState('Sheet1');
   const [actualSheetNumericalId, setActualSheetNumericalId] = useState<number | null>(null);
-  const [isFormatting, setIsFormatting] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<'default' | 'asc' | 'desc'>('default');
@@ -100,18 +99,6 @@ export function StockRoomList() {
     } catch (err: any) {
       window.alert(err.message || 'Failed to add new location.');
       setAddingStatus('error');
-    }
-  };
-
-  const handleFormatColors = async () => {
-    if (!sheetId || actualSheetNumericalId === null) return;
-    setIsFormatting(true);
-    try {
-      await formatStockColors(sheetId, actualSheetNumericalId, mainTabName);
-    } catch (err: any) {
-      window.alert('Failed to format colors: ' + err.message);
-    } finally {
-      setIsFormatting(false);
     }
   };
 
@@ -200,15 +187,6 @@ export function StockRoomList() {
         <div className="flex flex-wrap items-center gap-2">
           {sheetId && (
             <>
-              <button 
-                onClick={handleFormatColors}
-                disabled={isFormatting}
-                className="px-4 py-2.5 rounded-full text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700 shadow-sm text-sm flex items-center gap-2"
-                title="Assign random colors to each class block in Google Sheets"
-              >
-                <Palette className={`w-4 h-4 ${isFormatting ? 'animate-pulse text-indigo-500' : ''}`} />
-                <span className="hidden sm:inline">Format Colors</span>
-              </button>
               <button 
                 onClick={() => setIsAdding(true)}
                 className="px-4 py-2.5 rounded-full text-white bg-gradient-to-r from-blue-500 to-cyan-400 font-bold hover:from-blue-600 hover:to-cyan-500 transition-colors shadow-sm text-sm flex items-center gap-2"
@@ -354,7 +332,7 @@ export function StockRoomList() {
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Try a different search term.</p>
         </div>
       ) : (
-        <div className={`stock-location-grid ${sortedLocations.length > 2 ? 'has-edge-blur' : ''}`}>
+        <div className="stock-location-grid">
           {sortedLocations.map((cls) => (
             <Link
               key={cls.title}

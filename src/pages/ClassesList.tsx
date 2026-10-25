@@ -20,7 +20,6 @@ import {
   X,
   CheckCheck,
   Search,
-  Palette,
   ArrowDownAZ,
   ArrowUpAZ,
   ArrowUpDown,
@@ -53,7 +52,6 @@ export function ClassesList() {
   const [actualSheetNumericalId, setActualSheetNumericalId] = useState<
     number | null
   >(null);
-  const [isFormatting, setIsFormatting] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState<"default" | "asc" | "desc">(
@@ -152,18 +150,6 @@ export function ClassesList() {
     }
   };
 
-  const handleFormatColors = async () => {
-    if (!sheetId || actualSheetNumericalId === null) return;
-    setIsFormatting(true);
-    try {
-      await formatClassColors(sheetId, actualSheetNumericalId, mainTabName);
-    } catch (err: any) {
-      window.alert("Failed to format colors: " + err.message);
-    } finally {
-      setIsFormatting(false);
-    }
-  };
-
   const handleOpenDraftReport = async () => {
     setShowDraftReport(true);
     setDraftReportLoading(true);
@@ -220,9 +206,10 @@ export function ClassesList() {
   }
 
   return (
-    <div className="inventory-page space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="inventory-page classes-page">
+      <div className="classes-page-head flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
+          <span className="classes-page-eyebrow"><span className="classes-page-live" /> 2027 WORKSPACE / {classes.length} ROOMS</span>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
             Classes
           </h1>
@@ -235,23 +222,12 @@ export function ClassesList() {
             <>
               <button
                 onClick={handleOpenDraftReport}
-                disabled={isFormatting}
+                disabled={draftReportLoading}
                 className="px-4 py-2.5 rounded-full text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 font-bold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors border border-blue-200 dark:border-blue-500/20 shadow-sm text-sm flex items-center gap-2"
                 title="View inventory report for all classes"
               >
                 <FileText className="w-4 h-4" />
                 <span className="hidden sm:inline">Draft Report</span>
-              </button>
-              <button
-                onClick={handleFormatColors}
-                disabled={isFormatting}
-                className="px-4 py-2.5 rounded-full text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700 shadow-sm text-sm flex items-center gap-2"
-                title="Assign random colors to each class block in Google Sheets"
-              >
-                <Palette
-                  className={`w-4 h-4 ${isFormatting ? "animate-pulse text-indigo-500" : ""}`}
-                />
-                <span className="hidden sm:inline">Format Colors</span>
               </button>
               <button
                 onClick={() => setIsAdding(true)}
@@ -289,7 +265,7 @@ export function ClassesList() {
       </div>
 
       {classes.length > 0 && (
-        <div className="relative">
+        <div className="classes-page-search relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-slate-500" />
           <input
             type="text"
@@ -389,13 +365,14 @@ export function ClassesList() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {sortedClasses.map((cls) =>
+        <div className="classes-page-scroll grid gap-4 sm:grid-cols-2">
+          {sortedClasses.map((cls, index) =>
             cls.isChecked ? (
               <Link
                 key={cls.title}
                 to={`/classes/${encodeURIComponent(cls.title)}`}
-                className="group p-5 rounded-2xl border border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/40 shadow-sm hover:shadow-md flex items-center justify-between"
+                className="classes-card group p-5 rounded-2xl border border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-950/40 shadow-sm hover:shadow-md flex items-center justify-between"
+                style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
                 aria-label={`${cls.title}, done`}
               >
                 <div className="flex items-center gap-4 min-w-0">
@@ -413,7 +390,8 @@ export function ClassesList() {
               <Link
                 key={cls.title}
                 to={`/classes/${encodeURIComponent(cls.title)}`}
-                className="group p-5 rounded-2xl border shadow-sm transition-all flex items-center justify-between bg-white/60 dark:bg-slate-800/60 border-white/40 dark:border-white/10 backdrop-blur-md hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-500"
+                className="classes-card group p-5 rounded-2xl border shadow-sm transition-all flex items-center justify-between bg-white/60 dark:bg-slate-800/60 border-white/40 dark:border-white/10 backdrop-blur-md hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-500"
+                style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}
               >
                 <div className="flex items-center gap-4">
                   <div className="p-3 rounded-xl transition-colors bg-indigo-50 dark:bg-indigo-900/20 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/40">

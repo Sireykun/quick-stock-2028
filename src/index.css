@@ -211,8 +211,6 @@
 .stock-location-tile strong,.stock-item-tile strong { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; overflow-wrap:anywhere; font-size:19px; line-height:1.15; }
 .stock-location-tile-footer { width:100%; display:flex; align-items:center; gap:5px; color:#63839b; font-size:11px; font-weight:700; }.stock-location-tile-footer svg:last-child { margin-left:auto; }
 .stock-location-tile-done { background:#eaf6ff; border-color:#85c7ea; color:#1f5f88; }.stock-location-tile-done .stock-location-tile-icon { background:#d9effc; color:#328dbf; }.stock-location-tile-done .stock-location-tile-footer { color:#357fa8; }
-.stock-location-grid.has-edge-blur > .stock-location-tile:nth-last-child(-n+2) { filter:blur(2.5px) saturate(.72); }
-.stock-location-grid.has-edge-blur > .stock-location-tile:nth-last-child(-n+2):is(:hover,:focus-visible) { filter:none; }
 .stock-room-hero { display:grid; grid-template-columns:minmax(0,1fr) minmax(190px,280px); align-items:center; gap:24px; padding:22px; }
 .stock-room-hero-copy { min-width:0; padding:8px 12px; }.stock-room-kicker { color:#6e9db8; font-size:11px; font-weight:800; letter-spacing:.14em; }.stock-room-hero h1 { font-size:clamp(29px,4vw,50px); line-height:1.05; color:#234b69; font-weight:800; margin:12px 0; overflow-wrap:anywhere; }.stock-room-hero p { color:#68859b; font-size:13px; line-height:1.5; max-width:350px; }
 .stock-room-photo { aspect-ratio:1; border-radius:20px; overflow:hidden; border:1px solid #d2e5f1; background:#e5f4fc; }.stock-room-photo img { width:100%; height:100%; object-fit:cover; }.stock-room-photo-empty { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:#5f9fc2; font-size:12px; }
@@ -529,7 +527,6 @@
 .stock-location-tile,.stock-item-tile,.inventory-category-grid button,.nova-top-item,.nova-schedule-entry {
   transition:transform .22s cubic-bezier(.2,.75,.25,1),background-color .22s ease,border-color .22s ease,box-shadow .22s ease;
 }
-.stock-location-grid.has-edge-blur > .stock-location-tile:nth-last-child(-n+2) { transition:transform .22s cubic-bezier(.2,.75,.25,1),background-color .22s ease,border-color .22s ease,box-shadow .22s ease,filter .3s ease; }
 .stock-location-tile:hover,.stock-item-tile:hover,.inventory-category-grid button:hover { transform:translateY(-3px); }
 .nova-top-item:hover,.nova-schedule-entry:hover { background-color:rgba(98,178,218,.08); }
 .quickstock-shell input,.quickstock-shell select,.quickstock-shell textarea {
@@ -752,3 +749,26 @@ html { scroll-behavior: smooth; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *,*::before,*::after { animation-duration: .01ms!important; transition-duration: .01ms!important; } }
 @media print { .quickstock-sidebar, .quickstock-mobile-nav { display:none!important; } .quickstock-shell { display:block!important; overflow:visible!important; background:white!important; } main { overflow:visible!important; } }
+
+/* Classes workspace: controls remain visible while the room cards scroll. */
+.quickstock-main-content:has(.classes-page) { display:flex; flex-direction:column; min-height:0; }
+.quickstock-main-content:has(.classes-page) > .quickstock-page-enter { flex:1; min-height:0; }
+.classes-page { display:flex; flex-direction:column; gap:16px; height:100%; min-height:0; }
+.classes-page-head { position:relative; flex:none; overflow:hidden; isolation:isolate; padding:18px 20px; border:1px solid #cce7f5; border-radius:24px; background:radial-gradient(circle at 89% 12%,#abe7f38a,transparent 30%),linear-gradient(115deg,#eefaffed,#f8fcffdc); box-shadow:0 12px 34px #398bb31c; }
+.classes-page-head::after { content:""; position:absolute; z-index:-1; top:-65%; left:-30%; width:32%; height:230%; transform:rotate(22deg); background:linear-gradient(90deg,transparent,#ffffff8c,transparent); animation:classes-head-glow 8s ease-in-out infinite; pointer-events:none; }
+.classes-page-eyebrow { display:inline-flex; align-items:center; gap:7px; margin-bottom:6px; color:#287da6; font-size:10px; font-weight:850; letter-spacing:.14em; }
+.classes-page-live { width:7px; height:7px; border-radius:50%; background:#19c5b4; box-shadow:0 0 0 4px #19c5b42e; animation:classes-live 2.6s ease-in-out infinite; }
+.classes-page-search { flex:none; }
+.classes-page-search input { box-shadow:0 9px 24px #3a8bb018; }
+.classes-page-scroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; align-content:start; grid-auto-rows:max-content; padding:4px 8px 14px 4px; scrollbar-color:#91c7df transparent; }
+.classes-card { position:relative; overflow:hidden; animation:classes-card-in .45s cubic-bezier(.2,.75,.25,1) both; transition:transform .25s cubic-bezier(.2,.75,.25,1),box-shadow .25s,border-color .25s; }
+.classes-card::after { content:""; position:absolute; inset:auto 0 0; height:2px; transform:scaleX(0); transform-origin:left; background:linear-gradient(90deg,#2f91cb,#16d4c1); transition:transform .3s ease; }
+.classes-card:hover,.classes-card:focus-visible { transform:translateY(-2px); box-shadow:0 14px 30px #287eab24; }
+.classes-card:hover::after,.classes-card:focus-visible::after { transform:scaleX(1); }
+.dark .classes-page-head { border-color:#38657d; background:radial-gradient(circle at 89% 12%,#227b9280,transparent 30%),linear-gradient(115deg,#183b51,#152e43); }
+.dark .classes-page-eyebrow { color:#8ccee8; }
+@keyframes classes-head-glow { 0%,25% { left:-35%; } 65%,100% { left:125%; } }
+@keyframes classes-live { 50% { box-shadow:0 0 0 7px #19c5b412; } }
+@keyframes classes-card-in { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+@media (prefers-reduced-motion:reduce) { .classes-page-head::after,.classes-page-live,.classes-card { animation:none; } .classes-card:hover,.classes-card:focus-visible { transform:none; } }
+@media print { .quickstock-main-content:has(.classes-page),.classes-page { display:block; height:auto; overflow:visible; }.classes-page-scroll { overflow:visible; max-height:none; }.classes-page-head::after { display:none; } }

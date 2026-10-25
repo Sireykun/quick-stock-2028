@@ -64,7 +64,6 @@ import { motion, AnimatePresence } from "motion/react";
 import { cn, getItemIcon } from "../lib/utils";
 import { BarcodeScanner } from "./BarcodeScanner";
 import { useLanguage } from "./LanguageProvider";
-import { findDuplicateMatches, loadLocatedAssets } from "../lib/duplicateAssets";
 import { groupStockItems, stockModelChoices } from "../lib/stockGroups";
 import {
   PieChart,
@@ -340,7 +339,6 @@ export function InventoryList({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<SheetRow[]>([]);
-  const savedIdentifiers = useRef(new Map<number, { snid: string; hostname: string }>());
   const [actualTabName, setActualTabName] = useState<string>("");
   const [actualSheetNumericalId, setActualSheetNumericalId] = useState<
     number | null
@@ -485,7 +483,6 @@ export function InventoryList({
       await Promise.all(promises);
 
       setItems(data);
-      savedIdentifiers.current = new Map(data.map(item => [item.row, { snid: item.snid || '', hostname: item.hostname || '' }]));
 
       setModifiedRows(new Set());
     } catch (err: any) {
@@ -805,30 +802,6 @@ export function InventoryList({
     setItemToDelete(null);
   };
 
-  const confirmDuplicateRows = async (candidates: SheetRow[]): Promise<boolean> => {
-    const candidatesToCheck = candidates.filter(item => {
-      const saved = savedIdentifiers.current.get(item.row);
-      const snid = item.snid?.trim().toLowerCase() || '';
-      const hostname = item.hostname?.trim().toLowerCase() || '';
-      return (snid && snid !== (saved?.snid.trim().toLowerCase() || '')) ||
-        (hostname && hostname !== (saved?.hostname.trim().toLowerCase() || ''));
-    });
-    if (!candidatesToCheck.length) return true;
-    try {
-      const assets = await loadLocatedAssets(sheetId);
-      const conflicts = candidatesToCheck.flatMap(item => {
-        const sourceLocation = `${type === 'stock' ? 'Stock' : 'Class'}: ${item.location || className || title || ''}`;
-        return findDuplicateMatches({ ...item, sourceLocation }, assets).map(match =>
-          `${item.item} — ${match.field} ${match.value}: ${match.matches.map(other => `${other.item} in ${other.sourceLocation}`).join(', ')}`
-        );
-      });
-      return conflicts.length === 0 || window.confirm(`Duplicate asset IDs found:\n\n${conflicts.join('\n')}\n\nSave anyway?`);
-    } catch (err) {
-      console.warn('Could not check duplicate asset IDs', err);
-      return window.confirm('Could not check other locations for duplicate asset IDs. Save anyway?');
-    }
-  };
-
   const handleSave = async (onlyRows?: number[]) => {
     if (saving || modifiedRows.size === 0 || (onlyRows && !onlyRows.some(row => modifiedRows.has(row)))) return;
     setSaving(true);
@@ -837,10 +810,6 @@ export function InventoryList({
     const allUpdates = items.filter((item) => modifiedRows.has(item.row) && (!onlyRows || onlyRows.includes(item.row)));
     const deletes = allUpdates.filter((item) => item._isDeleted);
     const updates = allUpdates.filter((item) => !item._isDeleted);
-    if (!(await confirmDuplicateRows(updates))) {
-      setSaving(false);
-      return;
-    }
 
     try {
       if (updates.length > 0 && deletes.length === 0) {
@@ -864,8 +833,6 @@ export function InventoryList({
         ).catch(() => {});
       }
       setItems((prev) => prev.filter((item) => !deletes.some((d) => d.row === item.row)));
-      for (const item of updates) savedIdentifiers.current.set(item.row, { snid: item.snid || '', hostname: item.hostname || '' });
-      for (const item of deletes) savedIdentifiers.current.delete(item.row);
       setModifiedRows(current => new Set([...current].filter(row => !allUpdates.some(item => item.row === row))));
       setLastSavedAt(Date.now());
     } catch (err: any) {
@@ -929,11 +896,6 @@ export function InventoryList({
       lastUpdated: new Date().toLocaleString(),
       status: "",
     };
-
-    if (!(await confirmDuplicateRows([{ ...newItemObj, row: 0 }]))) {
-      setAddingStatus("idle");
-      return;
-    }
 
     // Optimistically add to items state
     setItems((prev) => [...prev, newItemObj]);

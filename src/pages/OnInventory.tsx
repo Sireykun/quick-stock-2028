@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertCircle, ArrowRight, Box, Camera, Check, CheckCircle2, ChevronRight, Folder, Plus, RefreshCw, Save, SkipForward, X } from 'lucide-react';
 import { addClassToInventory, addItemToClass, appendInventoryItem, getClassInventory, getClassLastRow, getClasses, getSpreadsheetMetadata, SheetRow, updateClassInventory } from '../lib/sheets';
-import { findDuplicateMatches, loadLocatedAssets } from '../lib/duplicateAssets';
 import { BarcodeScanner } from '../components/BarcodeScanner';
 import { FluidSpinner } from '../components/FluidSpinner';
 import { SearchableSelect } from '../components/SearchableSelect';
@@ -130,21 +129,6 @@ export function OnInventory() {
   };
 
   const nextRow = (list: SheetRow[], currentRow: number) => list.find(row => row.row > currentRow) || list[0];
-  const confirmDuplicateIds = async (candidate: SheetRow): Promise<boolean> => {
-    if (!candidate.snid?.trim() && !candidate.hostname?.trim()) return true;
-    try {
-      const assets = await loadLocatedAssets(sheetId);
-      const sourceLocation = `${area === 'class' ? 'Class' : 'Stock'}: ${location}`;
-      const matches = findDuplicateMatches({ ...candidate, sourceLocation }, assets);
-      if (!matches.length) return true;
-      return window.confirm(`This asset ID is already used:\n\n${matches.map(match =>
-        `${match.field} ${match.value}: ${match.matches.map(other => `${other.item} in ${other.sourceLocation}`).join(', ')}`
-      ).join('\n')}\n\nSave anyway?`);
-    } catch (err) {
-      console.warn('Could not check duplicate asset IDs', err);
-      return window.confirm('Could not check other locations for duplicate asset IDs. Save anyway?');
-    }
-  };
   const skip = () => {
     if (!draft || visibleRows.length < 2) return;
     const next = nextRow(visibleRows.filter(row => row.row !== draft.row), draft.row);
@@ -171,7 +155,6 @@ export function OnInventory() {
         setNotice(`${name}: ${t('Saved on this device. Sync pending checks when online.')}`);
         return;
       }
-      if (!(await confirmDuplicateIds(updated))) return;
       await updateClassInventory(sheetId, tabName, [updated]);
       const nextRows = rows.map(row => row.row === updated.row ? updated : row);
       setRows(nextRows);
@@ -194,7 +177,6 @@ export function OnInventory() {
     setSaving(true);
     setError(null);
     try {
-      if (!(await confirmDuplicateIds({ ...newItem, location }))) return;
       let lastRow = sheetNumericId === null ? null : await getClassLastRow(sheetId, tabName, location);
       if (lastRow === null && sheetNumericId !== null) {
         await addClassToInventory(sheetId, tabName, location);
