@@ -211,6 +211,8 @@
 .stock-location-tile strong,.stock-item-tile strong { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; overflow-wrap:anywhere; font-size:19px; line-height:1.15; }
 .stock-location-tile-footer { width:100%; display:flex; align-items:center; gap:5px; color:#63839b; font-size:11px; font-weight:700; }.stock-location-tile-footer svg:last-child { margin-left:auto; }
 .stock-location-tile-done { background:#eaf6ff; border-color:#85c7ea; color:#1f5f88; }.stock-location-tile-done .stock-location-tile-icon { background:#d9effc; color:#328dbf; }.stock-location-tile-done .stock-location-tile-footer { color:#357fa8; }
+.stock-location-grid.has-edge-blur > .stock-location-tile:nth-last-child(-n+2) { filter:blur(2.5px) saturate(.72); }
+.stock-location-grid.has-edge-blur > .stock-location-tile:nth-last-child(-n+2):is(:hover,:focus-visible) { filter:none; }
 .stock-room-hero { display:grid; grid-template-columns:minmax(0,1fr) minmax(190px,280px); align-items:center; gap:24px; padding:22px; }
 .stock-room-hero-copy { min-width:0; padding:8px 12px; }.stock-room-kicker { color:#6e9db8; font-size:11px; font-weight:800; letter-spacing:.14em; }.stock-room-hero h1 { font-size:clamp(29px,4vw,50px); line-height:1.05; color:#234b69; font-weight:800; margin:12px 0; overflow-wrap:anywhere; }.stock-room-hero p { color:#68859b; font-size:13px; line-height:1.5; max-width:350px; }
 .stock-room-photo { aspect-ratio:1; border-radius:20px; overflow:hidden; border:1px solid #d2e5f1; background:#e5f4fc; }.stock-room-photo img { width:100%; height:100%; object-fit:cover; }.stock-room-photo-empty { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:#5f9fc2; font-size:12px; }
@@ -527,6 +529,7 @@
 .stock-location-tile,.stock-item-tile,.inventory-category-grid button,.nova-top-item,.nova-schedule-entry {
   transition:transform .22s cubic-bezier(.2,.75,.25,1),background-color .22s ease,border-color .22s ease,box-shadow .22s ease;
 }
+.stock-location-grid.has-edge-blur > .stock-location-tile:nth-last-child(-n+2) { transition:transform .22s cubic-bezier(.2,.75,.25,1),background-color .22s ease,border-color .22s ease,box-shadow .22s ease,filter .3s ease; }
 .stock-location-tile:hover,.stock-item-tile:hover,.inventory-category-grid button:hover { transform:translateY(-3px); }
 .nova-top-item:hover,.nova-schedule-entry:hover { background-color:rgba(98,178,218,.08); }
 .quickstock-shell input,.quickstock-shell select,.quickstock-shell textarea {

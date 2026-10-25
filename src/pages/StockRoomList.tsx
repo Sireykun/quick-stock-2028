@@ -354,7 +354,7 @@ export function StockRoomList() {
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Try a different search term.</p>
         </div>
       ) : (
-        <div className="stock-location-grid">
+        <div className={`stock-location-grid ${sortedLocations.length > 2 ? 'has-edge-blur' : ''}`}>
           {sortedLocations.map((cls) => (
             <Link
               key={cls.title}
