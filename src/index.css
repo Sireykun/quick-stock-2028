@@ -783,3 +783,18 @@ html { scroll-behavior: smooth; }
 @keyframes classes-card-in { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
 @media (prefers-reduced-motion:reduce) { .classes-page-head::after,.classes-page-live,.classes-card { animation:none; } .classes-card:hover,.classes-card:focus-visible { transform:none; } }
 @media print { .quickstock-app-shell > main:has(.fixed-workspace),.quickstock-main-content:has(.fixed-workspace),.quickstock-main-content:has(.fixed-workspace) > .quickstock-page-enter,.fixed-workspace,.class-detail-inventory,.inventory-items-panel { display:block; height:auto; overflow:visible; }.classes-page-scroll,.inventory-items-panel .inventory-items-scroll { overflow:visible; max-height:none; }.classes-page-head::after { display:none; } }
+
+/* Phone screens need one natural scroll surface and reachable actions. */
+@media screen and (max-width:767px) {
+  .quickstock-app-shell > main:has(.fixed-workspace) { overflow-y:auto; }
+  .quickstock-main-content:has(.fixed-workspace),
+  .quickstock-main-content:has(.fixed-workspace) > .quickstock-page-enter,
+  .fixed-workspace,.class-detail-inventory,.inventory-items-panel { display:block; flex:none; height:auto; overflow:visible; }
+  .classes-page > * + *,.office-page > * + *,.class-detail-page > * + *,.room-inventory-page > * + *,.class-detail-inventory > * + * { margin-top:16px; }
+  .classes-page-scroll,.office-page-scroll,.inventory-items-panel .inventory-items-scroll { overflow:visible; max-height:none; }
+  .class-detail-page,.room-inventory-page { padding-bottom:150px; }
+  .inventory-items-panel .inventory-items-add { position:fixed; z-index:25; bottom:calc(76px + env(safe-area-inset-bottom)); left:12px; right:12px; max-height:38dvh; overflow-y:auto; margin:0; padding:8px; border:1px solid #bfdbea; border-radius:16px; background:#f7fbffef; box-shadow:0 8px 28px #143f5a38; backdrop-filter:blur(18px); }
+  .inventory-items-panel:has(.inventory-items-submit) .inventory-items-add { bottom:calc(136px + env(safe-area-inset-bottom)); }
+  .inventory-items-panel .inventory-items-submit { position:fixed; z-index:25; bottom:calc(76px + env(safe-area-inset-bottom)); left:12px; right:12px; width:auto; min-height:52px; margin:0; padding:10px; }
+  .dark .inventory-items-panel .inventory-items-add { border-color:#426c85; background:#19374bed; }
+}
