@@ -1412,7 +1412,7 @@ export function InventoryList({
   }
 
   return (
-    <div className="space-y-6 pb-12 relative" aria-busy={saving}>
+    <div className={cn("relative", type === "class" ? "class-detail-inventory" : "space-y-6 pb-12")} aria-busy={saving}>
       <AnimatePresence>
         {(saving || addingStatus === "saving") && (
           <motion.div
@@ -1496,7 +1496,7 @@ export function InventoryList({
       )}
       {!error && modifiedRows.size === 0 && lastSavedAt && <p role="status" className="text-sm font-semibold text-sky-800 dark:text-sky-200">{t('Saved to Google Sheets')}</p>}
 
-      {modifiedRows.size > 0 && (
+      {type !== "class" && modifiedRows.size > 0 && (
         <div role="status" className="inventory-unsaved-banner sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-200 bg-indigo-50/95 px-4 py-3 shadow-lg backdrop-blur-md dark:border-indigo-500/30 dark:bg-slate-900/95">
           <div className="flex items-center gap-2 text-sm font-semibold text-indigo-900 dark:text-indigo-100">
             <AlertCircle className="h-4 w-4 shrink-0" />
@@ -1555,7 +1555,7 @@ export function InventoryList({
       )}
 
       {items.length === 0 && !error ? (
-        <div inert={saving} className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl rounded-[32px] border border-white/60 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.04)] shadow-sm overflow-hidden p-2 sm:p-5">
+        <div inert={saving} className={cn("bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl rounded-[32px] border border-white/60 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.04)] shadow-sm overflow-hidden p-2 sm:p-5", type === "class" && "inventory-items-panel")}>
           <div className="text-center py-12 border border-slate-200 dark:border-slate-700 border-dashed rounded-xl bg-slate-50 dark:bg-slate-900/50 mb-4">
             <Package className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
             <h3 className="text-slate-700 dark:text-slate-300 font-medium">
@@ -1566,7 +1566,7 @@ export function InventoryList({
             </p>
           </div>
 
-          <div className="mt-4 pt-4 border-t border-slate-100 px-2 sm:px-4">
+          <div className="inventory-items-add mt-4 pt-4 border-t border-slate-100 px-2 sm:px-4">
             {!isAddingItem ? (
               <button
                 onClick={() => setIsAddingItem(true)}
@@ -1667,7 +1667,7 @@ export function InventoryList({
           </div>
         </div>
       ) : (
-        <div inert={saving} className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl rounded-[32px] border border-white/60 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.04)] shadow-sm overflow-hidden p-2 sm:p-5">
+        <div inert={saving} className={cn("bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl rounded-[32px] border border-white/60 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.04)] shadow-sm overflow-hidden p-2 sm:p-5", type === "class" && "inventory-items-panel")}>
           {filteredItems.length === 0 ? (
             <div className="text-center py-12 border border-slate-200 dark:border-slate-700 border-dashed rounded-xl bg-slate-50 dark:bg-slate-900/50 mb-4">
               <Search className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
@@ -1719,14 +1719,14 @@ export function InventoryList({
                 </section>}
               </div>
             ) : (
-              <div className="inventory-item-list divide-y divide-slate-100 dark:divide-slate-700/50 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white/60 dark:bg-slate-800/60">
+              <div className="inventory-item-list inventory-items-scroll divide-y divide-slate-100 dark:divide-slate-700/50 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white/60 dark:bg-slate-800/60" aria-label="Inventory items">
                 {(isPhone ? filteredItems.slice(0, visibleLimit) : filteredItems).map((item, idx) => renderItemCard(item, idx))}
               </div>
             )
           )}
           {type !== 'stock' && isPhone && filteredItems.length > visibleLimit && <button type="button" onClick={() => setVisibleLimit(limit => limit + 30)} className="mt-3 min-h-12 w-full rounded-xl border border-sky-400 bg-sky-50 font-bold text-sky-900 dark:bg-sky-950 dark:text-sky-100">{t('Show more items')} ({filteredItems.length - visibleLimit} {t('left')})</button>}
 
-          {(type !== 'stock' || !selectedStockGroup) && <div className="mt-4 pt-4 border-t border-slate-100 px-2 sm:px-4">
+          {(type !== 'stock' || !selectedStockGroup) && <div className="inventory-items-add mt-4 pt-4 border-t border-slate-100 px-2 sm:px-4">
             {!isAddingItem ? (
               <button
                 onClick={() => setIsAddingItem(true)}
@@ -1830,7 +1830,7 @@ export function InventoryList({
             onClick={() => handleSave()}
             disabled={saving || modifiedRows.size === 0}
             className={cn(
-              "w-full font-bold py-4 rounded-2xl shadow-lg mt-6 transition-all",
+              "inventory-items-submit w-full font-bold py-4 rounded-2xl shadow-lg mt-6 transition-all",
               modifiedRows.size > 0
                 ? "bg-indigo-600 text-white shadow-indigo-200 dark:shadow-indigo-900/20 hover:bg-indigo-700 hover:shadow-indigo-300 dark:hover:shadow-indigo-900/40"
                 : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed shadow-none",

@@ -206,7 +206,7 @@ export function ClassesList() {
   }
 
   return (
-    <div className="inventory-page classes-page">
+    <div className="inventory-page classes-page fixed-workspace">
       <div className="classes-page-head flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <span className="classes-page-eyebrow"><span className="classes-page-live" /> 2027 WORKSPACE / {classes.length} ROOMS</span>

@@ -751,10 +751,20 @@ html { scroll-behavior: smooth; }
 @media print { .quickstock-sidebar, .quickstock-mobile-nav { display:none!important; } .quickstock-shell { display:block!important; overflow:visible!important; background:white!important; } main { overflow:visible!important; } }
 
 /* Classes workspace: controls remain visible while the room cards scroll. */
-.quickstock-app-shell > main:has(.classes-page) { height:100dvh; min-height:0; overflow:hidden; }
-.quickstock-main-content:has(.classes-page) { display:flex; flex-direction:column; flex:1 1 0; min-height:0; overflow:hidden; }
-.quickstock-main-content:has(.classes-page) > .quickstock-page-enter { display:flex; flex-direction:column; flex:1 1 0; min-height:0; overflow:hidden; }
+.quickstock-app-shell > main:has(.fixed-workspace) { height:100dvh; min-height:0; overflow:hidden; }
+.quickstock-main-content:has(.fixed-workspace) { display:flex; flex-direction:column; flex:1 1 0; min-height:0; overflow:hidden; }
+.quickstock-main-content:has(.fixed-workspace) > .quickstock-page-enter { display:flex; flex-direction:column; flex:1 1 0; min-height:0; overflow:hidden; }
 .classes-page { display:flex; flex-direction:column; flex:1 1 0; gap:16px; min-height:0; overflow:hidden; }
+.office-page,.class-detail-page,.room-inventory-page { display:flex; flex-direction:column; flex:1 1 0; gap:16px; min-height:0; overflow:hidden; }
+.office-page-scroll { flex:1 1 0; min-height:0; }
+.class-detail-page > a:first-child,.room-inventory-page > button:first-child,.office-page > button:first-child { flex:none; align-self:flex-start; }
+.class-detail-inventory { display:flex; flex-direction:column; flex:1 1 0; gap:16px; min-height:0; overflow:hidden; }
+.class-detail-inventory > :not(.inventory-items-panel) { flex:none; }
+.inventory-items-panel { display:flex; flex-direction:column; flex:1 1 0; min-height:0; }
+.inventory-items-panel .inventory-items-scroll { display:grid; flex:1 1 0; min-height:0; overflow-y:auto; overscroll-behavior:contain; align-content:start; grid-auto-rows:max-content; scrollbar-color:#91c7df transparent; }
+.inventory-items-panel .inventory-items-add { flex:none; max-height:34dvh; overflow-y:auto; margin-top:8px; padding-top:10px; }
+.inventory-items-panel:not(:has(.inventory-items-scroll)) .inventory-items-add { margin-top:auto; }
+.inventory-items-panel .inventory-items-submit { flex:none; margin-top:10px; }
 .classes-page-head { position:relative; flex:none; overflow:hidden; isolation:isolate; padding:18px 20px; border:1px solid #cce7f5; border-radius:24px; background:radial-gradient(circle at 89% 12%,#abe7f38a,transparent 30%),linear-gradient(115deg,#eefaffed,#f8fcffdc); box-shadow:0 12px 34px #398bb31c; }
 .classes-page-head::after { content:""; position:absolute; z-index:-1; top:-65%; left:-30%; width:32%; height:230%; transform:rotate(22deg); background:linear-gradient(90deg,transparent,#ffffff8c,transparent); animation:classes-head-glow 8s ease-in-out infinite; pointer-events:none; }
 .classes-page-eyebrow { display:inline-flex; align-items:center; gap:7px; margin-bottom:6px; color:#287da6; font-size:10px; font-weight:850; letter-spacing:.14em; }
@@ -772,4 +782,4 @@ html { scroll-behavior: smooth; }
 @keyframes classes-live { 50% { box-shadow:0 0 0 7px #19c5b412; } }
 @keyframes classes-card-in { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
 @media (prefers-reduced-motion:reduce) { .classes-page-head::after,.classes-page-live,.classes-card { animation:none; } .classes-card:hover,.classes-card:focus-visible { transform:none; } }
-@media print { .quickstock-app-shell > main:has(.classes-page),.quickstock-main-content:has(.classes-page),.quickstock-main-content:has(.classes-page) > .quickstock-page-enter,.classes-page { display:block; height:auto; overflow:visible; }.classes-page-scroll { overflow:visible; max-height:none; }.classes-page-head::after { display:none; } }
+@media print { .quickstock-app-shell > main:has(.fixed-workspace),.quickstock-main-content:has(.fixed-workspace),.quickstock-main-content:has(.fixed-workspace) > .quickstock-page-enter,.fixed-workspace,.class-detail-inventory,.inventory-items-panel { display:block; height:auto; overflow:visible; }.classes-page-scroll,.inventory-items-panel .inventory-items-scroll { overflow:visible; max-height:none; }.classes-page-head::after { display:none; } }
