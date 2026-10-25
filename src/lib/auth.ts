@@ -5,7 +5,6 @@ import firebaseConfig from '../../firebase-applet-config.json';
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
-const provider = new GoogleAuthProvider();
 const sheetsProvider = new GoogleAuthProvider();
 sheetsProvider.addScope('https://www.googleapis.com/auth/spreadsheets');
 
@@ -45,13 +44,17 @@ export const initAuth = (
 };
 
 // Must be called from a button click or user interaction
-export const googleSignIn = async (): Promise<{ user: User } | null> => {
+export const googleSignIn = async (): Promise<{ user: User; accessToken: string }> => {
   try {
     isSigningIn = true;
     cachedAccessToken = null;
     localStorage.removeItem('quickStock_google_oauth_token');
-    const result = await signInWithPopup(auth, provider);
-    return { user: result.user };
+    const result = await signInWithPopup(auth, sheetsProvider);
+    const token = GoogleAuthProvider.credentialFromResult(result)?.accessToken;
+    if (!token) throw new Error('Google did not grant access to Sheets. Please sign in again.');
+    cachedAccessToken = token;
+    localStorage.setItem('quickStock_google_oauth_token', token);
+    return { user: result.user, accessToken: token };
   } catch (error: any) {
     if (error?.code !== 'auth/popup-closed-by-user') {
       console.error('Sign in error:', error);
@@ -183,12 +186,13 @@ export const linkGoogleAccount = async (): Promise<{ user: User; accessToken: st
     const currentUser = auth.currentUser;
     if (!currentUser) throw new Error("No user is signed in");
     
-    const result = await linkWithPopup(currentUser, provider);
+    const result = await linkWithPopup(currentUser, sheetsProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (!credential?.accessToken) {
       throw new Error('Failed to get access token from Google');
     }
     cachedAccessToken = credential.accessToken;
+    localStorage.setItem('quickStock_google_oauth_token', credential.accessToken);
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
     if (error?.code === 'auth/credential-already-in-use') {

@@ -24,7 +24,6 @@ import {
   formatStockColors,
 } from "../lib/sheets";
 import { useTheme } from "../components/ThemeProvider";
-import { authorizeGoogleSheets, getAccessToken } from "../lib/auth";
 import { canPromptInstall, promptInstall } from "../lib/install";
 import { AuditRule, readAuditRules, writeAuditRules } from "../lib/auditRules";
 import { useLanguage } from "../components/LanguageProvider";
@@ -92,7 +91,7 @@ export function Settings() {
   const [auditRulesSaved, setAuditRulesSaved] = useState(false);
   const { theme, setTheme } = useTheme();
   const { language, setLanguage, t } = useLanguage();
-  const { role, user, sharedSheetId } = useAuth();
+  const { role, user, sharedSheetId, hasGoogleAccess, connectGoogleSheets } = useAuth();
   const [accessMembers, setAccessMembers] = useState<{ email: string; role: 'editor' | 'viewer'; status: 'active' | 'pending' | 'revoked'; invited_at: string | null; last_access_at: string | null; revoked_at: string | null; shared_sheet_id: string | null; drive_permission_id: string | null }[]>([]);
   const [accessEmail, setAccessEmail] = useState('');
   const [accessRole, setAccessRole] = useState<'editor' | 'viewer'>('viewer');
@@ -155,12 +154,6 @@ export function Settings() {
   >("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [authorizing, setAuthorizing] = useState(false);
-  const [hasActiveGoogleToken, setHasActiveGoogleToken] = useState<boolean>(
-    () => {
-      const token = getAccessToken();
-      return !!token && token !== "dummy_token_for_email_login";
-    },
-  );
 
   useEffect(() => {
     const savedClasses = localStorage.getItem("quickStock_classesSheetId") || '';
@@ -188,8 +181,7 @@ export function Settings() {
     setAuthorizing(true);
     setErrorMsg("");
     try {
-      await authorizeGoogleSheets();
-      setHasActiveGoogleToken(true);
+      await connectGoogleSheets();
       if (classesSheetId.trim()) await getSpreadsheetMetadata(spreadsheetIdFromInput(classesSheetId));
       setStatus("success");
       setTimeout(() => setStatus("idle"), 3000);
@@ -210,13 +202,13 @@ export function Settings() {
     try {
       const targetId = spreadsheetIdFromInput(classesSheetId);
       if (!targetId) throw new Error('Enter a Google Sheets link or spreadsheet ID.');
-      if (hasActiveGoogleToken) await getSpreadsheetMetadata(targetId);
+      if (hasGoogleAccess) await getSpreadsheetMetadata(targetId);
 
       await saveWorkspaceSheet(targetId);
       localStorage.setItem("quickStock_lowInventoryThreshold", lowInventoryThreshold);
-      setStatus(hasActiveGoogleToken ? "success" : "needsAuth");
+      setStatus(hasGoogleAccess ? "success" : "needsAuth");
 
-      if (hasActiveGoogleToken) setTimeout(() => setStatus("idle"), 3000);
+      if (hasGoogleAccess) setTimeout(() => setStatus("idle"), 3000);
     } catch (err: any) {
       console.error(err);
       setStatus("error");
@@ -267,9 +259,9 @@ export function Settings() {
             {t('Manage your inventory connection, appearance, and audit tracking.')}
           </p>
         </div>
-        <div className={`inline-flex items-center gap-2 self-start rounded-full border px-3 py-2 text-xs font-bold sm:self-auto ${hasActiveGoogleToken ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300' : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300'}`}>
-          <span className={`h-2 w-2 rounded-full ${hasActiveGoogleToken ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-          {hasActiveGoogleToken ? 'Google connected' : 'Google not connected'}
+        <div className={`inline-flex items-center gap-2 self-start rounded-full border px-3 py-2 text-xs font-bold sm:self-auto ${hasGoogleAccess ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300' : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300'}`}>
+          <span className={`h-2 w-2 rounded-full ${hasGoogleAccess ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+          {hasGoogleAccess ? 'Google connected' : 'Google not connected'}
         </div>
       </div>
 
@@ -353,14 +345,14 @@ export function Settings() {
           <div>
             <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">{t('Google Sheets access')}</h3>
             <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
-              {hasActiveGoogleToken ? 'Google account connected. Save the sheet above to verify access.' : 'Connect a Google account with access to this Sheet to read and save live inventory.'}
+              {hasGoogleAccess ? 'Connected through your Google sign-in. No second sign-in is needed.' : 'Connect a Google account with access to this Sheet to read and save live inventory.'}
             </p>
           </div>
-          <button type="button" onClick={handleAuthorizeGoogle} disabled={authorizing} className="shrink-0 min-h-11 px-4 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-bold disabled:opacity-50">
-            {authorizing ? 'Connecting...' : hasActiveGoogleToken ? t('Reconnect Google') : t('Connect Google')}
-          </button>
+          {hasGoogleAccess
+            ? <span className="shrink-0 rounded-full bg-emerald-100 px-4 py-2 text-sm font-bold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Connected</span>
+            : <button type="button" onClick={handleAuthorizeGoogle} disabled={authorizing} className="shrink-0 min-h-11 px-4 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-bold disabled:opacity-50">{authorizing ? 'Connecting...' : t('Connect Google')}</button>}
         </div>
-        {!hasActiveGoogleToken && <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{t('If Google says “Access blocked: gen-lang-client” after Connect Google, your Gmail must be allowed in that Google OAuth project. App roles alone cannot grant Google Sheets consent.')}</p>}
+        {!hasGoogleAccess && <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{t('If Google says “Access blocked: gen-lang-client” after Connect Google, your Gmail must be allowed in that Google OAuth project. App roles alone cannot grant Google Sheets consent.')}</p>}
 
         {!sharedSheetId && <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Starting a new inventory?</h3><p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Create a ready-to-use spreadsheet with starter tabs.</p></div><button type="button" onClick={handleCreateStarterSheets} disabled={status === 'creating'} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-sky-200 px-4 text-sm font-bold text-sky-700 transition-colors hover:bg-sky-50 disabled:opacity-50 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950/40">{status === 'creating' ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-sky-600 border-t-transparent" /> : <FilePlus2 className="h-4 w-4" />}Create starter sheets</button></div>}
 

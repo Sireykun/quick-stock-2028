@@ -103,7 +103,7 @@ export function Layout() {
           <div className="hs-login-brand"><HSWordmark /></div>
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Quick Stock</h1>
-            <p className="text-slate-500 dark:text-slate-400 mt-2 text-sm font-medium">Sign in to manage IT inventory seamlessly connected to Google Sheets.</p>
+            <p className="text-slate-500 dark:text-slate-400 mt-2 text-sm font-medium">Sign in once with Google to open Quick Stock and connect your inventory Sheet.</p>
           </div>
           
                     {authMode === 'google' ? (

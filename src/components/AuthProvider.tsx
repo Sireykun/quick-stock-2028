@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { User } from 'firebase/auth';
-import { initAuth, googleSignIn, emailSignIn, emailSignUp, linkGoogleAccount, logout as signOutUser, getFirebaseIdToken, setAppRole } from '../lib/auth';
+import { initAuth, googleSignIn, authorizeGoogleSheets, emailSignIn, emailSignUp, linkGoogleAccount, logout as signOutUser, getFirebaseIdToken, setAppRole } from '../lib/auth';
 import { DEFAULT_SPREADSHEET_ID } from '../lib/config';
 
 interface AuthContextType {
@@ -17,6 +17,7 @@ interface AuthContextType {
   emailLogin: (email: string, password: string) => Promise<void>;
   emailRegister: (email: string, password: string) => Promise<void>;
   linkGoogle: () => Promise<void>;
+  connectGoogleSheets: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -34,6 +35,7 @@ const AuthContext = createContext<AuthContextType>({
   emailLogin: async () => {},
   emailRegister: async () => {},
   linkGoogle: async () => {},
+  connectGoogleSheets: async () => {},
   logout: async () => {},
 });
 
@@ -111,10 +113,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoginError(null);
     try {
       const result = await googleSignIn();
-      if (result) {
-        setUser(result.user);
-        setHasGoogleAccess(false);
-      }
+      setUser(result.user);
+      setHasGoogleAccess(Boolean(result.accessToken));
     } catch (error) {
       console.error("Login failed", error);
       const failure = error as { code?: string; message?: string };
@@ -168,6 +168,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const connectGoogleSheets = async () => {
+    const token = await authorizeGoogleSheets();
+    setHasGoogleAccess(Boolean(token));
+  };
+
   const logout = async () => {
     await signOutUser();
     setUser(null);
@@ -179,7 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, sharedSheetId, accessLoading, accessError, loginError, loading, isLoggingIn, login, emailLogin, emailRegister, linkGoogle, logout, hasGoogleAccess }}>
+    <AuthContext.Provider value={{ user, role, sharedSheetId, accessLoading, accessError, loginError, loading, isLoggingIn, login, emailLogin, emailRegister, linkGoogle, connectGoogleSheets, logout, hasGoogleAccess }}>
       {children}
     </AuthContext.Provider>
   );
