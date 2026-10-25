@@ -1496,7 +1496,7 @@ export function InventoryList({
       )}
       {!error && modifiedRows.size === 0 && lastSavedAt && <p role="status" className="text-sm font-semibold text-sky-800 dark:text-sky-200">{t('Saved to Google Sheets')}</p>}
 
-      {type !== "class" && modifiedRows.size > 0 && (
+      {(type !== "class" || isPhone) && modifiedRows.size > 0 && (
         <div role="status" className="inventory-unsaved-banner sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-200 bg-indigo-50/95 px-4 py-3 shadow-lg backdrop-blur-md dark:border-indigo-500/30 dark:bg-slate-900/95">
           <div className="flex items-center gap-2 text-sm font-semibold text-indigo-900 dark:text-indigo-100">
             <AlertCircle className="h-4 w-4 shrink-0" />
